@@ -1,8 +1,7 @@
-const assert = require('node:assert/strict')
-const test = require('node:test')
+const assert = require("node:assert/strict");
+const test = require("node:test");
 
-const { add } = require('./index.js')
-
-test('adds two numbers', () => {
-  assert.equal(add(2, 3), 5)
-})
+void test("adds two numbers", async () => {
+  const { add } = await import("./index.js");
+  assert.equal(add(2, 3), 5);
+});
