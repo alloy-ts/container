@@ -1,23 +1,21 @@
 {
   "name": "@lib/module",
   "version": "0.0.0",
-  "main": "index.js",
-  "types": "index.d.ts",
   "files": [
     "dist",
     "index.js",
     "index.d.ts"
   ],
   "type": "module",
+  "types": "index.d.ts",
   "exports": {
     ".": "./dist/main.mjs",
-    "./index.js": "./index.js",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "napi build --platform --esm && vp pack",
-    "build:napi": "napi build --platform --esm",
-    "build:release": "napi build --platform --release --esm",
+    "build": "node build.js && vp pack",
+    "build:napi": "node build.js",
+    "build:release": "node build.js --release",
     "dev": "vp pack --watch",
     "start": "vp run src/main.ts",
     "test": "vp test && node --test test.cjs",
@@ -39,7 +37,23 @@
     "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0-rc.1"
   },
   "napi": {
-    "binaryName": "my-addon"
+    "binaryName": "my-addon",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-pc-windows-msvc",
+      "i686-pc-windows-msvc",
+      "aarch64-pc-windows-msvc",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "armv7-unknown-linux-gnueabihf",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-musl",
+      "aarch64-linux-android",
+      "armv7-linux-androideabi",
+      "x86_64-unknown-freebsd",
+      "wasm32-wasip1-threads"
+    ]
   },
   "devEngines": {
     "packageManager": {
