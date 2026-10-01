@@ -834,11 +834,24 @@ dependencies = [
 name = "container-native"
 version = "0.1.0"
 dependencies = [
+ "event-manager",
  "fusevm",
+ "kvm-bindings",
+ "kvm-ioctls",
+ "linux-loader",
  "napi",
  "napi-build",
  "napi-derive",
  "runtime-rs",
+ "seccompiler",
+ "vfio-bindings",
+ "vfio-ioctls",
+ "virtio-bindings",
+ "virtio-queue",
+ "vm-fdt",
+ "vm-memory",
+ "vm-superio",
+ "vmm-sys-util",
 ]
 
 [[package]]
@@ -2452,6 +2465,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4933f3f57a8e9d9da04db23fb153356ecaf00cbd14aee46279c33dc80925c37"
 
 [[package]]
+name = "kvm-bindings"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11cf0ca75d59e9d298647c59cf6c5286fa048120caa77972a7a504a0824d234f"
+dependencies = [
+ "vmm-sys-util",
+]
+
+[[package]]
+name = "kvm-ioctls"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "333f77a20344a448f3f70664918135fddeb804e938f28a99d685bd92926e0b19"
+dependencies = [
+ "bitflags 2.13.2",
+ "kvm-bindings",
+ "libc",
+ "vmm-sys-util",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2489,6 +2523,15 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.21",
  "uuid 1.26.1",
+]
+
+[[package]]
+name = "linux-loader"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de72cb02c55ecffcf75fe78295926f872eb6eb0a58d629c58a8c324dc26380f6"
+dependencies = [
+ "vm-memory",
 ]
 
 [[package]]
@@ -5553,6 +5596,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
+name = "vfio-bindings"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "188dac3057a0cbc94470085204c84b82ff7ec5dac629a514323cd133d1f9abe0"
+
+[[package]]
+name = "vfio-ioctls"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e5ea6ba374c4ca77ee8cde0b927a40083dd2388dc0fb464fed6fef62edc3566"
+dependencies = [
+ "byteorder",
+ "kvm-bindings",
+ "kvm-ioctls",
+ "libc",
+ "log",
+ "thiserror 2.0.21",
+ "vfio-bindings",
+ "vm-memory",
+ "vmm-sys-util",
+]
+
+[[package]]
 name = "virt_container"
 version = "0.1.0"
 source = "git+https://github.com/kata-containers/kata-containers.git#2ebcc670cd1086aa383e31cada57280025271fe3"
@@ -5587,6 +5653,48 @@ dependencies = [
  "url",
  "uuid 1.26.1",
 ]
+
+[[package]]
+name = "virtio-bindings"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "091f1f09cfbf2a78563b562e7a949465cce1aef63b6065645188d995162f8868"
+
+[[package]]
+name = "virtio-queue"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e358084f32ed165fddb41d98ff1b7ff3c08b9611d8d6114a1b422e2e85688baf"
+dependencies = [
+ "libc",
+ "log",
+ "virtio-bindings",
+ "vm-memory",
+ "vmm-sys-util",
+]
+
+[[package]]
+name = "vm-fdt"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e21282841a059bb62627ce8441c491f09603622cd5a21c43bfedc85a2952f23"
+
+[[package]]
+name = "vm-memory"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f39348a049689cabd3377cdd9182bf526ec76a6f823b79903896452e9d7a7380"
+dependencies = [
+ "libc",
+ "thiserror 2.0.21",
+ "winapi",
+]
+
+[[package]]
+name = "vm-superio"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "503041e3dca68fbd5425c04e4c2ad63c57a31da5b6eb13aaafbcaaf2b9cdc74f"
 
 [[package]]
 name = "vmm-sys-util"
