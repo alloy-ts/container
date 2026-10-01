@@ -1,5 +1,5 @@
 [package]
-name = "my-addon-native"
+name = "container-native"
 version = "0.1.0"
 edition = "2024"
 
@@ -7,8 +7,10 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-napi = "3"
+fusevm = "0.26.8"
+napi = { version = "3", features = ["tokio_rt"] }
 napi-derive = "3"
+runtime-rs = { git = "https://github.com/kata-containers/kata-containers.git", version = "0.1.0" }
 
 [build-dependencies]
 napi-build = "2"
