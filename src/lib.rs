@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
+use virtfw_varstore::store::EfiVarStore;
 
 #[napi(object)]
 #[derive(Clone, Debug, Default)]
@@ -63,6 +64,121 @@ impl JsVolumeHandle {
   #[napi]
   pub fn list(&self) -> Vec<String> {
     vec![]
+  }
+}
+
+#[napi]
+pub struct JsEfiVarStore {
+  inner: EfiVarStore,
+}
+
+#[napi]
+impl JsEfiVarStore {
+  #[napi(constructor)]
+  pub fn new() -> Self {
+    Self {
+      inner: EfiVarStore::new(),
+    }
+  }
+
+  #[napi]
+  pub fn get_setup_mode(&self) -> bool {
+    self.inner.get_setup_mode()
+  }
+
+  #[napi]
+  pub fn get_secure_boot_enable(&mut self) -> Option<bool> {
+    self.inner.get_secure_boot_enable()
+  }
+
+  #[napi]
+  pub fn set_secure_boot_enable(&mut self, enabled: bool) {
+    self.inner.set_secure_boot_enable(enabled);
+  }
+
+  #[napi]
+  pub fn enroll_pk_mgmt(&mut self) {
+    self.inner.enroll_pk_mgmt();
+  }
+
+  #[napi]
+  pub fn enroll_pk_redhat(&mut self) {
+    self.inner.enroll_pk_redhat();
+  }
+
+  #[napi]
+  pub fn enroll_pk_microsoft(&mut self) {
+    self.inner.enroll_pk_microsoft();
+  }
+
+  #[napi]
+  pub fn enroll_kek_microsoft(&mut self) {
+    self.inner.enroll_kek_microsoft();
+  }
+
+  #[napi]
+  pub fn enroll_db_microsoft_uefi(&mut self) {
+    self.inner.enroll_db_microsoft_uefi();
+  }
+
+  #[napi]
+  pub fn enroll_dbx_native(&mut self) {
+    self.inner.enroll_dbx_native();
+  }
+
+  #[napi]
+  pub fn fs_inode_index(&self) -> u32 {
+    self.inner.fs_inode_index()
+  }
+
+  #[napi]
+  pub fn fs_inode_is_used(&self, inode: u32) -> bool {
+    self.inner.fs_inode_is_used(inode)
+  }
+
+  #[napi]
+  pub fn fs_clear_modified(&mut self) {
+    self.inner.fs_clear_modified();
+  }
+
+  #[napi]
+  pub fn policy_lock(&mut self) {
+    self.inner.policy_lock();
+  }
+
+  #[napi]
+  pub fn quirk_disable_shim_reboot(&mut self, enabled: bool) {
+    self.inner.quirk_disable_shim_reboot(enabled);
+  }
+
+  #[napi]
+  pub fn quirk_fallback_verbose(&mut self, enabled: bool) {
+    self.inner.quirk_fallback_verbose(enabled);
+  }
+
+  #[napi]
+  pub fn quirk_shim_verbose(&mut self, enabled: bool) {
+    self.inner.quirk_shim_verbose(enabled);
+  }
+
+  #[napi]
+  pub fn reset(&mut self) {
+    self.inner.reset();
+  }
+
+  #[napi]
+  pub fn end_of_dxe(&mut self) {
+    self.inner.end_of_dxe();
+  }
+
+  #[napi]
+  pub fn ready_to_boot(&mut self) {
+    self.inner.ready_to_boot();
+  }
+
+  #[napi]
+  pub fn exit_boot_service(&mut self) {
+    self.inner.exit_boot_service();
   }
 }
 

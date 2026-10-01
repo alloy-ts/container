@@ -18,6 +18,7 @@ runtime-rs = { git = "https://github.com/kata-containers/kata-containers.git", v
 seccompiler = "0.5.0"
 vfio-bindings = "0.6.2"
 vfio-ioctls = "0.6.0"
+virtfw-varstore = "0.6.6"
 virtio-bindings = "0.2.0"
 virtio-queue = "0.17.0"
 vm-fdt = "0.3.0"

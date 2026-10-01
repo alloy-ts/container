@@ -4,6 +4,7 @@ export const JsContainer = native.JsContainer;
 export const JsGetOrCreateResult = native.JsGetOrCreateResult;
 export const JsImageHandle = native.JsImageHandle;
 export const JsVolumeHandle = native.JsVolumeHandle;
+export const JsEfiVarStore = native.JsEfiVarStore;
 
 export const Container = native.JsContainer;
 
