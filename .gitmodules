@@ -7,3 +7,6 @@
 [submodule "examples/napi-rs"]
 	path = examples/napi-rs
 	url = https://github.com/napi-rs/napi-rs.git
+[submodule "packages/apple-container"]
+	path = packages/apple-container
+	url = https://github.com/apple/container
