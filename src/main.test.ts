@@ -35,6 +35,8 @@ test("JsContainer sub-handles accessible", () => {
   expect(runtime.network).toBeDefined();
   expect(runtime.registry).toBeDefined();
   expect(runtime.system).toBeDefined();
+  expect(runtime.compose).toBeDefined();
+  expect(runtime.compose.system).toBeDefined();
 });
 
 test("JsEfiVarStore initializes", () => {
