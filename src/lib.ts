@@ -8,6 +8,10 @@ export const JsGetOrCreateResult = native.JsGetOrCreateResult;
 export const JsImageHandle = native.JsImageHandle;
 export const JsVolumeHandle = native.JsVolumeHandle;
 
-export const main = () => {
-  return "Container initialized";
-};
+export type {
+  JsOptions,
+  JsContainerOptions,
+  JsContainerRestOptions,
+  JsContainerInfo,
+  JsRuntimeMetrics,
+} from "../index.d.ts";

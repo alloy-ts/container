@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 napi = "3"
 napi-derive = "3"
+runtime-rs = { git = "https://github.com/kata-containers/kata-containers.git", version = "0.1.0" }
 
 [build-dependencies]
 napi-build = "2"

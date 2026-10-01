@@ -1,6 +1,10 @@
 import { expect, test } from "vite-plus/test";
-import { main } from "./main.ts";
+import { main, JsContainer } from "./main.ts";
 
-test("main returns Hello, world!", () => {
-  expect(main()).toBe("Hello, world!");
+test("main returns Container initialized", () => {
+  expect(main()).toBe("Container initialized");
+});
+
+test("JsContainer is defined", () => {
+  expect(JsContainer).toBeDefined();
 });
