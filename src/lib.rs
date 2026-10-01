@@ -32,17 +32,91 @@ pub struct JsContainerRestOptions {
 }
 
 #[napi(object)]
-#[derive(Clone, Debug, Default)]
-pub struct JsContainerState {
-  pub status: String,
+#[derive(Clone, Debug)]
+pub struct JsPublishedPort {
+  #[napi(js_name = "guestPort")]
+  pub guest_port: u32,
+  #[napi(js_name = "hostIp")]
+  pub host_ip: String,
+  #[napi(js_name = "hostPort")]
+  pub host_port: u32,
+  pub protocol: String,
+}
+
+#[napi(object)]
+#[derive(Clone, Debug)]
+pub struct JsOutboundNetworkInfo {
+  pub mode: String,
+  #[napi(js_name = "allowNet")]
+  pub allow_net: Vec<String>,
+}
+
+#[napi(object)]
+#[derive(Clone, Debug)]
+pub struct JsInboundNetworkInfo {
+  pub mode: String,
+  #[napi(js_name = "allowNet")]
+  pub allow_net: Vec<String>,
+}
+
+#[napi(object, use_nullable = true)]
+#[derive(Clone, Debug)]
+pub struct JsNetworkInfo {
+  pub outbound: JsOutboundNetworkInfo,
+  pub inbound: JsInboundNetworkInfo,
+  pub mode: String,
+  #[napi(js_name = "allowNet")]
+  pub allow_net: Vec<String>,
+  #[napi(js_name = "publishedPorts")]
+  pub published_ports: Option<Vec<JsPublishedPort>>,
+}
+
+#[napi(string_enum)]
+#[derive(Clone, Debug)]
+pub enum JsHealthState {
+  None,
+  Starting,
+  Healthy,
+  Unhealthy,
+}
+
+#[napi(object)]
+#[derive(Clone, Debug)]
+pub struct JsHealthStatus {
+  pub state: JsHealthState,
+  pub failures: u32,
+  pub last_check: Option<String>,
 }
 
 #[napi(object)]
 #[derive(Clone, Debug, Default)]
+pub struct JsContainerStateInfo {
+  pub status: String,
+  pub running: bool,
+  pub pid: Option<u32>,
+  pub exit_code: Option<i32>,
+}
+
+#[napi(object)]
+#[derive(Clone, Debug)]
 pub struct JsContainerInfo {
   pub id: String,
   pub name: Option<String>,
-  pub state: JsContainerState,
+  pub state: JsContainerStateInfo,
+  pub created_at: String,
+  pub started_at: Option<String>,
+  pub last_activity_at: Option<String>,
+  pub image: String,
+  pub cpus: u32,
+  pub memory_mib: u32,
+  pub network: Either<JsNetworkInfo, Null>,
+  #[napi(js_name = "autoStop")]
+  pub auto_stop: u32,
+  #[napi(js_name = "autoDelete")]
+  pub auto_delete: u32,
+  #[napi(js_name = "autoResume")]
+  pub auto_resume: bool,
+  pub health_status: JsHealthStatus,
 }
 
 #[napi(object)]
@@ -475,6 +549,166 @@ impl JsSystemHandle {
 }
 
 #[napi]
+pub struct JsComposeSystemHandle {}
+
+#[napi]
+impl JsComposeSystemHandle {
+  #[napi]
+  pub fn status(&self, _socket: Option<String>, _address: Option<String>) -> Result<String> {
+    Ok("container-compose daemon running".to_string())
+  }
+
+  #[napi]
+  pub fn generate_key(&self, name: String, _auth_file: Option<String>) -> Result<String> {
+    Ok(format!("key_{name}"))
+  }
+
+  #[napi]
+  pub fn generate_cert(&self, _out_dir: Option<String>, _cn: Option<String>, _days: Option<i32>) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    map.insert("cert".to_string(), "cert.pem".to_string());
+    map.insert("key".to_string(), "key.pem".to_string());
+    Ok(map)
+  }
+
+  #[napi]
+  pub fn list_keys(&self, _auth_file: Option<String>) -> Result<Vec<HashMap<String, String>>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn revoke_key(&self, _name: String, _auth_file: Option<String>) -> Result<()> {
+    Ok(())
+  }
+}
+
+#[napi]
+pub struct JsComposeHandle {}
+
+#[napi]
+impl JsComposeHandle {
+  #[napi]
+  pub fn up(&self, _detach: Option<bool>, _build: Option<bool>) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn down(&self, _volumes: Option<bool>) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn start(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn stop(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn restart(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn create(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn kill(&self, _signal: Option<String>) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn rm(&self, _force: Option<bool>) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn ps(&self) -> Result<Vec<String>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn ls(&self) -> Result<Vec<String>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn logs(&self, _follow: Option<bool>) -> Result<Vec<String>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn top(&self) -> Result<Vec<String>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn port(&self, service: String, private_port: i32) -> Result<String> {
+    Ok(format!("{service}:{private_port}"))
+  }
+
+  #[napi]
+  pub fn events(&self) -> Result<Vec<String>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn config(&self) -> Result<String> {
+    Ok("".to_string())
+  }
+
+  #[napi]
+  pub fn build(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn run(&self, _service: String, _command: Option<Vec<String>>) -> Result<i32> {
+    Ok(0)
+  }
+
+  #[napi]
+  pub fn exec(&self, _service: String, _command: Vec<String>) -> Result<i32> {
+    Ok(0)
+  }
+
+  #[napi]
+  pub fn watch(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn pull(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn push(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn serve(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn version(&self) -> Result<String> {
+    Ok("container-compose v1.0.0".to_string())
+  }
+
+  #[napi(getter)]
+  pub fn system(&self) -> Result<JsComposeSystemHandle> {
+    Ok(JsComposeSystemHandle {})
+  }
+}
+
+#[napi]
 pub struct JsEfiVarStore {
   inner: EfiVarStore,
 }
@@ -683,8 +917,26 @@ impl JsContainer {
     let info = JsContainerInfo {
       id: container_id.clone(),
       name: name.clone(),
-      state: JsContainerState {
+      state: JsContainerStateInfo {
         status: "running".to_string(),
+        running: true,
+        pid: Some(100),
+        exit_code: None,
+      },
+      created_at: "1970-01-01T00:00:00Z".to_string(),
+      started_at: Some("1970-01-01T00:00:00Z".to_string()),
+      last_activity_at: None,
+      image: "alpine:latest".to_string(),
+      cpus: 1,
+      memory_mib: 512,
+      network: Either::B(Null),
+      auto_stop: 0,
+      auto_delete: 0,
+      auto_resume: false,
+      health_status: JsHealthStatus {
+        state: JsHealthState::None,
+        failures: 0,
+        last_check: None,
       },
     };
     state.containers.insert(container_id.clone(), info.clone());
@@ -698,7 +950,7 @@ impl JsContainer {
   }
 
   #[napi]
-  pub async fn create(&self, _options: JsContainerOptions, name: Option<String>) -> Result<JsContainer> {
+  pub async fn create(&self, options: JsContainerOptions, name: Option<String>) -> Result<JsContainer> {
     let container_id = format!("cnt_{}", name.as_deref().unwrap_or("default"));
     let mut state = self
       .inner
@@ -708,8 +960,26 @@ impl JsContainer {
     let info = JsContainerInfo {
       id: container_id.clone(),
       name: name.clone(),
-      state: JsContainerState {
-        status: "created".to_string(),
+      state: JsContainerStateInfo {
+        status: "configured".to_string(),
+        running: false,
+        pid: None,
+        exit_code: None,
+      },
+      created_at: "1970-01-01T00:00:00Z".to_string(),
+      started_at: None,
+      last_activity_at: None,
+      image: options.image.unwrap_or_else(|| "alpine:latest".to_string()),
+      cpus: options.cpus.unwrap_or(1) as u32,
+      memory_mib: options.memory_mib.unwrap_or(512) as u32,
+      network: Either::B(Null),
+      auto_stop: 0,
+      auto_delete: 0,
+      auto_resume: false,
+      health_status: JsHealthStatus {
+        state: JsHealthState::None,
+        failures: 0,
+        last_check: None,
       },
     };
     state.containers.insert(container_id.clone(), info.clone());
@@ -731,6 +1001,8 @@ impl JsContainer {
         .map_err(|e| Error::from_reason(e.to_string()))?;
       if let Some(info) = state.containers.get_mut(container_id) {
         info.state.status = "running".to_string();
+        info.state.running = true;
+        info.state.pid = Some(101);
       }
     }
     Ok(0)
@@ -745,6 +1017,9 @@ impl JsContainer {
         .map_err(|e| Error::from_reason(e.to_string()))?;
       if let Some(info) = state.containers.get_mut(container_id) {
         info.state.status = "stopped".to_string();
+        info.state.running = false;
+        info.state.pid = None;
+        info.state.exit_code = Some(0);
       }
     }
     Ok(())
@@ -938,6 +1213,11 @@ impl JsContainer {
   #[napi(getter)]
   pub fn system(&self) -> Result<JsSystemHandle> {
     Ok(JsSystemHandle {})
+  }
+
+  #[napi(getter)]
+  pub fn compose(&self) -> Result<JsComposeHandle> {
+    Ok(JsComposeHandle {})
   }
 
   #[napi]
