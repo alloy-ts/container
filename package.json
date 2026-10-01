@@ -5,10 +5,10 @@
     "build",
     "dist"
   ],
-  "main": "build/index.js",
-  "types": "build/index.d.ts",
+  "main": "./src/lib.ts",
+  "types": "./src/lib.ts",
   "exports": {
-    ".": "./build/index.js",
+    ".": "./src/lib.ts",
     "./package.json": "./package.json"
   },
   "scripts": {

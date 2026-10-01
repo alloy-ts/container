@@ -16,6 +16,13 @@ pub struct JsContainerOptions {
   pub image: Option<String>,
   pub memory_mib: Option<i32>,
   pub cpus: Option<i32>,
+  pub name: Option<String>,
+  pub env: Option<HashMap<String, String>>,
+  pub workdir: Option<String>,
+  pub user: Option<String>,
+  pub detach: Option<bool>,
+  pub interactive: Option<bool>,
+  pub tty: Option<bool>,
 }
 
 #[napi(object)]
@@ -46,6 +53,230 @@ pub struct JsRuntimeMetrics {
 }
 
 #[napi]
+#[derive(Clone, Debug, Default)]
+pub struct JsBuildTransfer {
+  metadata: HashMap<String, String>,
+}
+
+#[napi]
+impl JsBuildTransfer {
+  #[napi(constructor)]
+  pub fn new(metadata: Option<HashMap<String, String>>) -> Self {
+    Self {
+      metadata: metadata.unwrap_or_default(),
+    }
+  }
+
+  #[napi(getter)]
+  pub fn metadata(&self) -> HashMap<String, String> {
+    self.metadata.clone()
+  }
+
+  #[napi]
+  pub fn stage(&self) -> Option<String> {
+    let stage = self.metadata.get("stage")?;
+    if stage.is_empty() {
+      None
+    } else {
+      Some(stage.clone())
+    }
+  }
+
+  #[napi]
+  pub fn method(&self) -> Option<String> {
+    let method = self.metadata.get("method")?;
+    if method.is_empty() {
+      None
+    } else {
+      Some(method.clone())
+    }
+  }
+
+  #[napi]
+  pub fn include_patterns(&self) -> Option<Vec<String>> {
+    let s = self.metadata.get("include-patterns")?;
+    if s.is_empty() {
+      None
+    } else {
+      Some(s.split(',').map(|p| p.to_string()).collect())
+    }
+  }
+
+  #[napi]
+  pub fn follow_paths(&self) -> Option<Vec<String>> {
+    let s = self.metadata.get("followpaths")?;
+    if s.is_empty() {
+      None
+    } else {
+      Some(s.split(',').map(|p| p.to_string()).collect())
+    }
+  }
+
+  #[napi]
+  pub fn mode(&self) -> Option<String> {
+    self.metadata.get("mode").cloned()
+  }
+
+  #[napi]
+  pub fn size(&self) -> Option<i64> {
+    let s = self.metadata.get("size")?;
+    if s.is_empty() {
+      None
+    } else {
+      s.parse::<i64>().ok()
+    }
+  }
+
+  #[napi]
+  pub fn offset(&self) -> Option<i64> {
+    let s = self.metadata.get("offset")?;
+    if s.is_empty() {
+      None
+    } else {
+      s.parse::<i64>().ok()
+    }
+  }
+
+  #[napi]
+  pub fn len(&self) -> Option<i64> {
+    let s = self.metadata.get("length")?;
+    if s.is_empty() {
+      None
+    } else {
+      s.parse::<i64>().ok()
+    }
+  }
+}
+
+#[napi]
+#[derive(Clone, Debug, Default)]
+pub struct JsImageTransfer {
+  metadata: HashMap<String, String>,
+}
+
+#[napi]
+impl JsImageTransfer {
+  #[napi(constructor)]
+  pub fn new(metadata: Option<HashMap<String, String>>) -> Self {
+    Self {
+      metadata: metadata.unwrap_or_default(),
+    }
+  }
+
+  #[napi(getter)]
+  pub fn metadata(&self) -> HashMap<String, String> {
+    self.metadata.clone()
+  }
+
+  #[napi]
+  pub fn stage(&self) -> Option<String> {
+    self.metadata.get("stage").cloned()
+  }
+
+  #[napi]
+  pub fn method(&self) -> Option<String> {
+    self.metadata.get("method").cloned()
+  }
+
+  #[napi]
+  pub fn ref_name(&self) -> Option<String> {
+    self.metadata.get("ref").cloned()
+  }
+
+  #[napi]
+  pub fn platform(&self) -> Option<String> {
+    self.metadata.get("platform").cloned()
+  }
+
+  #[napi]
+  pub fn mode(&self) -> Option<String> {
+    self.metadata.get("mode").cloned()
+  }
+
+  #[napi]
+  pub fn size(&self) -> Option<i64> {
+    let s = self.metadata.get("size")?;
+    s.parse::<i64>().ok()
+  }
+
+  #[napi]
+  pub fn len(&self) -> Option<i64> {
+    let s = self.metadata.get("length")?;
+    s.parse::<i64>().ok()
+  }
+
+  #[napi]
+  pub fn offset(&self) -> Option<i64> {
+    let s = self.metadata.get("offset")?;
+    s.parse::<i64>().ok()
+  }
+}
+
+#[napi(object)]
+#[derive(Clone, Debug, Default)]
+pub struct JsIo {
+  pub data: Vec<u8>,
+}
+
+#[napi(object)]
+#[derive(Clone, Debug, Default)]
+pub struct JsInfoRequest {
+  pub id: String,
+}
+
+#[napi(object)]
+#[derive(Clone, Debug, Default)]
+pub struct JsInfoResponse {
+  pub id: String,
+  pub status: String,
+}
+
+#[napi(object)]
+#[derive(Clone, Debug, Default)]
+pub struct JsClientStream {
+  pub data: Vec<u8>,
+}
+
+#[napi]
+#[derive(Clone, Debug, Default)]
+pub struct JsServerStream {
+  image_transfer: Option<JsImageTransfer>,
+  build_transfer: Option<JsBuildTransfer>,
+  io: Option<JsIo>,
+}
+
+#[napi]
+impl JsServerStream {
+  #[napi(constructor)]
+  pub fn new(
+    image_transfer: Option<&JsImageTransfer>,
+    build_transfer: Option<&JsBuildTransfer>,
+    io: Option<JsIo>,
+  ) -> Self {
+    Self {
+      image_transfer: image_transfer.cloned(),
+      build_transfer: build_transfer.cloned(),
+      io,
+    }
+  }
+
+  #[napi]
+  pub fn get_image_transfer(&self) -> Option<JsImageTransfer> {
+    self.image_transfer.clone()
+  }
+
+  #[napi]
+  pub fn get_build_transfer(&self) -> Option<JsBuildTransfer> {
+    self.build_transfer.clone()
+  }
+
+  #[napi]
+  pub fn get_io(&self) -> Option<JsIo> {
+    self.io.clone()
+  }
+}
+
+#[napi]
 pub struct JsImageHandle {}
 
 #[napi]
@@ -53,6 +284,26 @@ impl JsImageHandle {
   #[napi]
   pub fn list(&self) -> Vec<String> {
     vec![]
+  }
+
+  #[napi]
+  pub fn pull(&self, _reference: String) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn push(&self, _reference: String) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn delete(&self, _reference: String) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn prune(&self) -> Result<()> {
+    Ok(())
   }
 }
 
@@ -64,6 +315,162 @@ impl JsVolumeHandle {
   #[napi]
   pub fn list(&self) -> Vec<String> {
     vec![]
+  }
+
+  #[napi]
+  pub fn create(&self, name: String, _size: Option<String>) -> Result<String> {
+    Ok(name)
+  }
+
+  #[napi]
+  pub fn delete(&self, name: String) -> Result<()> {
+    let _ = name;
+    Ok(())
+  }
+
+  #[napi]
+  pub fn prune(&self) -> Result<()> {
+    Ok(())
+  }
+}
+
+#[napi]
+pub struct JsMachineHandle {}
+
+#[napi]
+impl JsMachineHandle {
+  #[napi]
+  pub fn create(&self, image: String, _name: Option<String>) -> Result<String> {
+    Ok(format!("machine_{image}"))
+  }
+
+  #[napi]
+  pub fn run(&self, _executable: Option<String>, _args: Option<Vec<String>>) -> Result<i32> {
+    Ok(0)
+  }
+
+  #[napi]
+  pub fn list(&self) -> Vec<String> {
+    vec![]
+  }
+
+  #[napi]
+  pub fn stop(&self, _id: String) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn delete(&self, _id: String) -> Result<()> {
+    Ok(())
+  }
+}
+
+#[napi(js_name = "JsK8sHandle")]
+pub struct JsK8sHandle {}
+
+#[napi]
+impl JsK8sHandle {
+  #[napi]
+  pub fn create(&self, name: Option<String>, _cpus: Option<i32>, _memory: Option<String>) -> Result<String> {
+    Ok(name.unwrap_or_else(|| "k8s-dev".to_string()))
+  }
+
+  #[napi]
+  pub fn delete(&self, _name: Option<String>) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn list(&self) -> Vec<String> {
+    vec!["k8s-dev".to_string()]
+  }
+
+  #[napi]
+  pub fn load_image(&self, _image: String, _name: Option<String>) -> Result<()> {
+    Ok(())
+  }
+}
+
+#[napi]
+pub struct JsNetworkHandle {}
+
+#[napi]
+impl JsNetworkHandle {
+  #[napi]
+  pub fn create(&self, name: String, _plugin: Option<String>, _subnet: Option<String>) -> Result<String> {
+    Ok(name)
+  }
+
+  #[napi]
+  pub fn list(&self) -> Vec<String> {
+    vec!["default".to_string()]
+  }
+
+  #[napi]
+  pub fn delete(&self, _name: String) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn prune(&self) -> Result<()> {
+    Ok(())
+  }
+}
+
+#[napi]
+pub struct JsRegistryHandle {}
+
+#[napi]
+impl JsRegistryHandle {
+  #[napi]
+  pub fn login(&self, _server: String, _username: Option<String>, _password: Option<String>) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn logout(&self, _server: String) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn list(&self) -> Vec<String> {
+    vec![]
+  }
+}
+
+#[napi]
+pub struct JsSystemHandle {}
+
+#[napi]
+impl JsSystemHandle {
+  #[napi]
+  pub fn start(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn stop(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn status(&self) -> Result<String> {
+    Ok("running".to_string())
+  }
+
+  #[napi]
+  pub fn version(&self) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    map.insert("version".to_string(), "1.0.0".to_string());
+    map.insert("component".to_string(), "@lib/container".to_string());
+    Ok(map)
+  }
+
+  #[napi]
+  pub fn df(&self) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    map.insert("reclaimable".to_string(), "0B".to_string());
+    Ok(map)
   }
 }
 
@@ -194,7 +601,7 @@ static DEFAULT_RUNTIME_STATE: Mutex<Option<Arc<Mutex<InnerContainerState>>>> = M
 #[napi]
 pub struct JsContainer {
   inner: Arc<Mutex<InnerContainerState>>,
-  _id: Option<String>,
+  id: Option<String>,
 }
 
 #[napi]
@@ -211,7 +618,7 @@ impl JsContainer {
         containers: HashMap::new(),
         created_total: 0,
       })),
-      _id: None,
+      id: None,
     })
   }
 
@@ -231,7 +638,7 @@ impl JsContainer {
 
     Ok(Self {
       inner: Arc::clone(lock.as_ref().unwrap()),
-      _id: None,
+      id: None,
     })
   }
 
@@ -261,7 +668,7 @@ impl JsContainer {
         containers: HashMap::new(),
         created_total: 0,
       })),
-      _id: None,
+      id: None,
     })
   }
 
@@ -286,7 +693,7 @@ impl JsContainer {
     }
     Ok(JsContainer {
       inner: Arc::clone(&self.inner),
-      _id: Some(container_id),
+      id: Some(container_id),
     })
   }
 
@@ -302,7 +709,7 @@ impl JsContainer {
       id: container_id.clone(),
       name: name.clone(),
       state: JsContainerState {
-        status: "running".to_string(),
+        status: "created".to_string(),
       },
     };
     state.containers.insert(container_id.clone(), info.clone());
@@ -311,8 +718,100 @@ impl JsContainer {
     }
     Ok(JsContainer {
       inner: Arc::clone(&self.inner),
-      _id: Some(container_id),
+      id: Some(container_id),
     })
+  }
+
+  #[napi]
+  pub async fn start(&self, _attach: Option<bool>, _interactive: Option<bool>) -> Result<i32> {
+    if let Some(ref container_id) = self.id {
+      let mut state = self
+        .inner
+        .lock()
+        .map_err(|e| Error::from_reason(e.to_string()))?;
+      if let Some(info) = state.containers.get_mut(container_id) {
+        info.state.status = "running".to_string();
+      }
+    }
+    Ok(0)
+  }
+
+  #[napi]
+  pub async fn stop(&self, _signal: Option<String>, _time: Option<i32>) -> Result<()> {
+    if let Some(ref container_id) = self.id {
+      let mut state = self
+        .inner
+        .lock()
+        .map_err(|e| Error::from_reason(e.to_string()))?;
+      if let Some(info) = state.containers.get_mut(container_id) {
+        info.state.status = "stopped".to_string();
+      }
+    }
+    Ok(())
+  }
+
+  #[napi]
+  pub async fn kill(&self, _signal: Option<String>) -> Result<()> {
+    self.stop(None, None).await
+  }
+
+  #[napi]
+  pub async fn exec(
+    &self,
+    _cmd: Vec<String>,
+    _env: Option<HashMap<String, String>>,
+    _cwd: Option<String>,
+    _user: Option<String>,
+    _detach: Option<bool>,
+    _interactive: Option<bool>,
+    _tty: Option<bool>,
+  ) -> Result<i32> {
+    Ok(0)
+  }
+
+  #[napi]
+  pub async fn inspect(&self) -> Result<JsContainerInfo> {
+    let id = self.id.clone().unwrap_or_else(|| "default".to_string());
+    let state = self
+      .inner
+      .lock()
+      .map_err(|e| Error::from_reason(e.to_string()))?;
+    state.containers.get(&id).cloned().ok_or_else(|| {
+      Error::from_reason(format!("Container not found: {}", id))
+    })
+  }
+
+  #[napi]
+  pub async fn logs(&self, _follow: Option<bool>, _tail: Option<i32>, _boot: Option<bool>) -> Result<Vec<String>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub async fn stats(&self, _no_stream: Option<bool>) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    map.insert("cpu".to_string(), "0.0%".to_string());
+    map.insert("memory".to_string(), "0MB".to_string());
+    Ok(map)
+  }
+
+  #[napi]
+  pub async fn clean(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub async fn copy(&self, _src: String, _dest: String) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub async fn commit(&self, reference: String) -> Result<String> {
+    Ok(reference)
+  }
+
+  #[napi]
+  pub async fn export(&self, _output_path: Option<String>) -> Result<Vec<u8>> {
+    Ok(vec![])
   }
 
   #[napi]
@@ -333,7 +832,7 @@ impl JsContainer {
     if let Some(id) = existing_id {
       let container = JsContainer {
         inner: Arc::clone(&self.inner),
-        _id: Some(id),
+        id: Some(id),
       };
       return Ok(JsGetOrCreateResult {
         inner_container: container,
@@ -382,7 +881,7 @@ impl JsContainer {
     if let Some(info) = state.containers.get(&id_or_name) {
       Ok(Some(JsContainer {
         inner: Arc::clone(&self.inner),
-        _id: Some(info.id.clone()),
+        id: Some(info.id.clone()),
       }))
     } else {
       Ok(None)
@@ -414,6 +913,31 @@ impl JsContainer {
   #[napi(getter)]
   pub fn volumes(&self) -> Result<JsVolumeHandle> {
     Ok(JsVolumeHandle {})
+  }
+
+  #[napi(getter)]
+  pub fn machines(&self) -> Result<JsMachineHandle> {
+    Ok(JsMachineHandle {})
+  }
+
+  #[napi(getter, js_name = "k8s")]
+  pub fn k8s(&self) -> Result<JsK8sHandle> {
+    Ok(JsK8sHandle {})
+  }
+
+  #[napi(getter)]
+  pub fn network(&self) -> Result<JsNetworkHandle> {
+    Ok(JsNetworkHandle {})
+  }
+
+  #[napi(getter)]
+  pub fn registry(&self) -> Result<JsRegistryHandle> {
+    Ok(JsRegistryHandle {})
+  }
+
+  #[napi(getter)]
+  pub fn system(&self) -> Result<JsSystemHandle> {
+    Ok(JsSystemHandle {})
   }
 
   #[napi]
@@ -463,7 +987,7 @@ impl JsGetOrCreateResult {
   pub fn get_container(&self) -> JsContainer {
     JsContainer {
       inner: Arc::clone(&self.inner_container.inner),
-      _id: self.inner_container._id.clone(),
+      id: self.inner_container.id.clone(),
     }
   }
 }
