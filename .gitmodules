@@ -10,3 +10,6 @@
 [submodule "packages/apple-container"]
 	path = packages/apple-container
 	url = https://github.com/apple/container
+[submodule "packages/container-compose"]
+	path = packages/container-compose
+	url = https://github.com/full-chaos/container-compose

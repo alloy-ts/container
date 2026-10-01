@@ -93,5 +93,11 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`);
 }
 
-export const { JsContainer, JsGetOrCreateResult, JsImageHandle, JsVolumeHandle } = nativeBinding;
+export const {
+  JsContainer,
+  JsGetOrCreateResult,
+  JsImageHandle,
+  JsVolumeHandle,
+  JsContainerCompose,
+} = nativeBinding;
 export const __napiBindingTarget = __napiLoadedBindingTarget;

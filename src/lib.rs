@@ -1,4 +1,5 @@
 pub mod apple_container;
+pub mod container_compose;
 
 use std::sync::Arc;
 use napi::bindgen_prelude::*;

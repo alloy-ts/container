@@ -31,6 +31,15 @@ export class JsVolumeHandle {
   list(): Array<string>;
 }
 
+export class JsContainerCompose {
+  constructor();
+  status(options?: JsComposeStatusOptions): boolean;
+  generateKey(options?: JsGenerateKeyOptions): string;
+  generateCert(options?: JsGenerateCertOptions): boolean;
+  listKeys(options?: JsListKeysOptions): Array<string>;
+  revokeKey(options: JsRevokeKeyOptions): boolean;
+}
+
 export interface JsOptions {
   homeDir?: string;
 }
@@ -54,4 +63,33 @@ export interface JsContainerInfo {
 export interface JsRuntimeMetrics {
   containersCreatedTotal: number;
   numRunningContainers: number;
+}
+
+export interface JsComposeStatusOptions {
+  socket?: string;
+  address?: string;
+  cacert?: string;
+}
+
+export interface JsGenerateKeyOptions {
+  name?: string;
+  authFile?: string;
+}
+
+export interface JsGenerateCertOptions {
+  outDir?: string;
+  cn?: string;
+  days?: number;
+  sanDns?: Array<string>;
+  sanIp?: Array<string>;
+  force?: boolean;
+}
+
+export interface JsListKeysOptions {
+  authFile?: string;
+}
+
+export interface JsRevokeKeyOptions {
+  name: string;
+  authFile?: string;
 }

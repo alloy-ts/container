@@ -7,6 +7,7 @@ export const JsContainer = native.JsContainer;
 export const JsGetOrCreateResult = native.JsGetOrCreateResult;
 export const JsImageHandle = native.JsImageHandle;
 export const JsVolumeHandle = native.JsVolumeHandle;
+export const JsContainerCompose = native.JsContainerCompose;
 
 export const main = () => {
   return "Container initialized";
