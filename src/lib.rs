@@ -605,18 +605,23 @@ pub struct RegistryHandle {}
 #[napi]
 impl RegistryHandle {
   #[napi]
-  pub fn login(&self, _server: String, _username: Option<String>, _password: Option<String>) -> Result<()> {
-    Ok(())
+  pub fn login(&self, server: String, username: Option<String>, password: Option<String>) -> Result<()> {
+    crate::cli::container_registry::handle_registry_login(crate::cli::container_registry::RegistryLoginOptions {
+      server,
+      username,
+      password,
+      ..Default::default()
+    })
   }
 
   #[napi]
-  pub fn logout(&self, _server: String) -> Result<()> {
-    Ok(())
+  pub fn logout(&self, server: String) -> Result<()> {
+    crate::cli::container_registry::handle_registry_logout(crate::cli::container_registry::RegistryLogoutOptions { server })
   }
 
   #[napi]
-  pub fn list(&self) -> Vec<String> {
-    vec![]
+  pub fn list(&self) -> Result<Vec<HashMap<String, String>>> {
+    crate::cli::container_registry::handle_registry_list(crate::cli::container_registry::RegistryListOptions::default())
   }
 }
 
