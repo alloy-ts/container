@@ -1,53 +1,107 @@
-# Starter Template
+# @lib/container (`container-native`)
 
-TypeScript starter template.
+High-performance Node.js / TypeScript native bindings for container management, virtualization, and runtime components built with Rust and `napi-rs`.
 
-## Development
+## Features
 
-- Configure local hooks:
+- **Container Management**: Create, start, stop, inspect, kill, remove, and monitor containers (`JsContainer`).
+- **Sub-Handles**: Specialized management handles for machines, Kubernetes clusters, networks, registries, compose projects, and system status.
+- **EFI Variable Store**: Managed EFI variable storage (`JsEfiVarStore`) supporting setup mode, SecureBoot configuration, key enrollments, and quirks.
+- **Image & Build Transfers**: High-level abstractions for streaming image transfers (`JsImageTransfer`), build contexts (`JsBuildTransfer`), and server streams (`JsServerStream`).
 
-```bash
-npm run prepare
-```
+## Installation & Setup
 
-- Install dependencies:
+1. Install dependencies:
 
 ```bash
 vp install
+# or
+npm install
 ```
 
-- Run the unit tests:
-
-```bash
-vp test
-```
-
-- Run the locally:
-
-```bash
-npm run dev
-```
-
-- Build the library:
+2. Build the native extension:
 
 ```bash
 npm run build
 ```
 
-- Code formatting:
+For a release build:
 
 ```bash
-npm run fmt
+npm run build:release
 ```
 
-- Linting:
+## Quick Start
 
-```bash
-npm run lint
+### Basic Container Usage
+
+```typescript
+import { JsContainer } from "@lib/container";
+
+async function main() {
+  // Initialize runtime state
+  const runtime = JsContainer.withDefaultConfig();
+
+  // Create a new container
+  const container = await runtime.create(
+    { image: "alpine:latest", cpus: 2, memoryMib: 512 },
+    "my-container",
+  );
+
+  // Start the container
+  await container.start();
+
+  // Inspect status
+  const info = await container.inspect();
+  console.log("Container status:", info.state.status);
+
+  // Stop the container
+  await container.stop();
+}
+
+main();
 ```
 
-- Code check:
+### Accessing Sub-Handles
 
-```bash
-npm run check
+```typescript
+import { JsContainer } from "@lib/container";
+
+const runtime = JsContainer.withDefaultConfig();
+
+// Machine Handle
+const machineId = runtime.machines.create("alpine:latest");
+
+// Kubernetes Handle
+const clusterName = runtime.k8s.create("my-k8s-cluster");
+
+// Network Handle
+const net = runtime.network.create("custom-bridge");
+
+// Compose Handle
+const composeVersion = runtime.compose.version();
+
+// System Status
+const status = runtime.system.status();
 ```
+
+### EFI Variable Store
+
+```typescript
+import { JsEfiVarStore } from "@lib/container";
+
+const store = new JsEfiVarStore();
+console.log("Setup mode:", store.getSetupMode());
+
+store.setSecureBootEnable(true);
+store.enrollPkMicrosoft();
+```
+
+## Development Commands
+
+- **Build Native Addon**: `npm run build`
+- **Run Unit Tests**: `npm run test` or `vp test`
+- **Watch Mode**: `npm run dev`
+- **Check Code**: `npm run check`
+- **Format Code**: `npm run fmt`
+- **Lint Code**: `npm run lint`
