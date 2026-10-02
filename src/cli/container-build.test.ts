@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ContainerBuild } from "./container-build.ts";
+import { ContainerBuildHandler } from "./container-build.ts";
 
-test("ContainerBuild.build programmable NAPI binding", async () => {
-  const result = await ContainerBuild.build({
+test("ContainerBuildHandler.handleBuild programmable NAPI binding", async () => {
+  const result = await ContainerBuildHandler.handleBuild({
     contextDir: ".",
     dockerfile: "Dockerfile",
     tags: ["test-app:latest"],
