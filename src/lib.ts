@@ -9,6 +9,8 @@ export const K8sHandle = native.K8sHandle;
 export const NetworkHandle = native.NetworkHandle;
 export const RegistryHandle = native.RegistryHandle;
 export const SystemHandle = native.SystemHandle;
+export const ContainerRegistry = native.ContainerRegistry;
+export const ContainerSystem = native.ContainerSystem;
 export const BuilderHandle = native.BuilderHandle;
 export const EfiVarStore = native.EfiVarStore;
 
