@@ -1,8 +1,8 @@
 import console from "node:console";
-import { JsContainer } from "./lib.ts";
+import { Container } from "./lib.ts";
 
 export const main = () => {
-  const runtime = JsContainer.withDefaultConfig();
+  const runtime = Container.withDefaultConfig();
   return runtime;
 };
 

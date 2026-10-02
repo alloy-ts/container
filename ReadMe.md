@@ -4,10 +4,10 @@ High-performance Node.js / TypeScript native bindings for container management, 
 
 ## Features
 
-- **Container Management**: Create, start, stop, inspect, kill, remove, and monitor containers (`JsContainer`).
+- **Container Management**: Create, start, stop, inspect, kill, remove, and monitor containers (`Container`).
 - **Sub-Handles**: Specialized management handles for machines, Kubernetes clusters, networks, registries, compose projects, and system status.
-- **EFI Variable Store**: Managed EFI variable storage (`JsEfiVarStore`) supporting setup mode, SecureBoot configuration, key enrollments, and quirks.
-- **Image & Build Transfers**: High-level abstractions for streaming image transfers (`JsImageTransfer`), build contexts (`JsBuildTransfer`), and server streams (`JsServerStream`).
+- **EFI Variable Store**: Managed EFI variable storage (`EfiVarStore`) supporting setup mode, SecureBoot configuration, key enrollments, and quirks.
+- **Image & Build Transfers**: High-level abstractions for streaming image transfers (`ImageTransfer`), build contexts (`BuildTransfer`), and server streams (`ServerStream`).
 
 ## Installation & Setup
 
@@ -36,11 +36,11 @@ npm run build:release
 ### Basic Container Usage
 
 ```typescript
-import { JsContainer } from "@lib/container";
+import { Container } from "@lib/container";
 
 async function main() {
   // Initialize runtime state
-  const runtime = JsContainer.withDefaultConfig();
+  const runtime = Container.withDefaultConfig();
 
   // Create a new container
   const container = await runtime.create(
@@ -65,9 +65,9 @@ main();
 ### Accessing Sub-Handles
 
 ```typescript
-import { JsContainer } from "@lib/container";
+import { Container } from "@lib/container";
 
-const runtime = JsContainer.withDefaultConfig();
+const runtime = Container.withDefaultConfig();
 
 // Machine Handle
 const machineId = runtime.machines.create("alpine:latest");
@@ -88,9 +88,9 @@ const status = runtime.system.status();
 ### EFI Variable Store
 
 ```typescript
-import { JsEfiVarStore } from "@lib/container";
+import { EfiVarStore } from "@lib/container";
 
-const store = new JsEfiVarStore();
+const store = new EfiVarStore();
 console.log("Setup mode:", store.getSetupMode());
 
 store.setSecureBootEnable(true);
