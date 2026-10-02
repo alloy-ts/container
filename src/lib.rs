@@ -1504,8 +1504,8 @@ impl Container {
   }
 
   #[napi(getter)]
-  pub fn images(&self) -> Result<ImageHandle> {
-    Ok(ImageHandle {})
+  pub fn images(&self) -> Result<cli::container_image::ContainerImage> {
+    Ok(cli::container_image::ContainerImage::new())
   }
 
   #[napi(getter)]
@@ -1524,8 +1524,8 @@ impl Container {
   }
 
   #[napi(getter)]
-  pub fn network(&self) -> Result<NetworkHandle> {
-    Ok(NetworkHandle {})
+  pub fn network(&self) -> Result<cli::container_network::ContainerNetwork> {
+    Ok(cli::container_network::ContainerNetwork::new())
   }
 
   #[napi(getter)]

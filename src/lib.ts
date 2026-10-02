@@ -11,6 +11,8 @@ export const RegistryHandle = native.RegistryHandle;
 export const SystemHandle = native.SystemHandle;
 export const ContainerRegistry = native.ContainerRegistry;
 export const ContainerSystem = native.ContainerSystem;
+export const ContainerImage = native.ContainerImage;
+export const ContainerNetwork = native.ContainerNetwork;
 export const BuilderHandle = native.BuilderHandle;
 export const EfiVarStore = native.EfiVarStore;
 
