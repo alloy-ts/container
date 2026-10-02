@@ -9,6 +9,7 @@ export const JsK8sHandle = native.JsK8sHandle;
 export const JsNetworkHandle = native.JsNetworkHandle;
 export const JsRegistryHandle = native.JsRegistryHandle;
 export const JsSystemHandle = native.JsSystemHandle;
+export const JsBuilderHandle = native.JsBuilderHandle;
 export const JsEfiVarStore = native.JsEfiVarStore;
 
 export const JsBuildTransfer = native.JsBuildTransfer;

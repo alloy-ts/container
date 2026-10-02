@@ -379,6 +379,28 @@ impl JsImageHandle {
   pub fn prune(&self) -> Result<()> {
     Ok(())
   }
+
+  #[napi]
+  pub fn inspect(&self, reference: String) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    map.insert("reference".to_string(), reference);
+    Ok(map)
+  }
+
+  #[napi]
+  pub fn load(&self, archive_path: String) -> Result<String> {
+    Ok(format!("loaded:{archive_path}"))
+  }
+
+  #[napi]
+  pub fn save(&self, _reference: String, _output_path: String) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn tag(&self, _source: String, _target: String) -> Result<()> {
+    Ok(())
+  }
 }
 
 #[napi]
@@ -405,6 +427,13 @@ impl JsVolumeHandle {
   #[napi]
   pub fn prune(&self) -> Result<()> {
     Ok(())
+  }
+
+  #[napi]
+  pub fn inspect(&self, name: String) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    map.insert("name".to_string(), name);
+    Ok(map)
   }
 }
 
@@ -436,6 +465,33 @@ impl JsMachineHandle {
   #[napi]
   pub fn delete(&self, _id: String) -> Result<()> {
     Ok(())
+  }
+
+  #[napi]
+  pub fn inspect(&self, name: String) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    map.insert("name".to_string(), name);
+    Ok(map)
+  }
+
+  #[napi]
+  pub fn capabilities(&self) -> Result<Vec<String>> {
+    Ok(vec!["virtualization".to_string()])
+  }
+
+  #[napi]
+  pub fn set(&self, _name: String, _cpus: Option<i32>, _memory: Option<String>) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn set_default(&self, _name: String) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn logs(&self, _name: String) -> Result<Vec<String>> {
+    Ok(vec![])
   }
 }
 
@@ -487,6 +543,39 @@ impl JsNetworkHandle {
 
   #[napi]
   pub fn prune(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn inspect(&self, name: String) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    map.insert("name".to_string(), name);
+    Ok(map)
+  }
+}
+
+#[napi]
+pub struct JsBuilderHandle {}
+
+#[napi]
+impl JsBuilderHandle {
+  #[napi]
+  pub fn start(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn stop(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn status(&self) -> Result<String> {
+    Ok("running".to_string())
+  }
+
+  #[napi]
+  pub fn delete(&self) -> Result<()> {
     Ok(())
   }
 }
@@ -545,6 +634,42 @@ impl JsSystemHandle {
     let mut map = HashMap::new();
     map.insert("reclaimable".to_string(), "0B".to_string());
     Ok(map)
+  }
+
+  #[napi]
+  pub fn logs(&self) -> Result<Vec<String>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn dns_list(&self) -> Result<Vec<String>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn dns_set(&self, _servers: Vec<String>) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn kernel_list(&self) -> Result<Vec<String>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn kernel_set(&self, _version: String) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn property_get(&self, key: String) -> Result<Option<String>> {
+    let _ = key;
+    Ok(None)
+  }
+
+  #[napi]
+  pub fn property_set(&self, _key: String, _value: String) -> Result<()> {
+    Ok(())
   }
 }
 
@@ -1195,6 +1320,11 @@ impl JsContainer {
     Ok(JsMachineHandle {})
   }
 
+  #[napi(getter)]
+  pub fn builder(&self) -> Result<JsBuilderHandle> {
+    Ok(JsBuilderHandle {})
+  }
+
   #[napi(getter, js_name = "k8s")]
   pub fn k8s(&self) -> Result<JsK8sHandle> {
     Ok(JsK8sHandle {})
@@ -1218,6 +1348,41 @@ impl JsContainer {
   #[napi(getter)]
   pub fn compose(&self) -> Result<JsComposeHandle> {
     Ok(JsComposeHandle {})
+  }
+
+  #[napi]
+  pub async fn run(
+    &self,
+    options: JsContainerOptions,
+    name: Option<String>,
+    _cmd: Option<Vec<String>>,
+  ) -> Result<JsContainer> {
+    let container = self.create(options, name).await?;
+    container.start(Some(false), Some(false)).await?;
+    Ok(container)
+  }
+
+  #[napi]
+  pub async fn prune(&self) -> Result<Vec<String>> {
+    let mut state = self
+      .inner
+      .lock()
+      .map_err(|e| Error::from_reason(e.to_string()))?;
+    let to_remove: Vec<String> = state
+      .containers
+      .iter()
+      .filter(|(_, info)| !info.state.running)
+      .map(|(k, _)| k.clone())
+      .collect();
+    for key in &to_remove {
+      state.containers.remove(key);
+    }
+    Ok(to_remove)
+  }
+
+  #[napi]
+  pub async fn delete(&self, id_or_name: String, force: Option<bool>) -> Result<()> {
+    self.remove(id_or_name, force).await
   }
 
   #[napi]
