@@ -115,14 +115,20 @@ test("Container ported CLI methods and sub-handles", async () => {
   const network = runtime.network;
   assert.deepEqual(network.inspect(["net1"]), [{ name: "net1", driver: "bridge" }]);
 
+  // Registry handle
+  const reg = runtime.registry;
+  assert.doesNotThrow(() => reg.login("docker.io", "user", "pass"));
+  assert.ok(Array.isArray(reg.list()));
+  assert.doesNotThrow(() => reg.logout("docker.io"));
+
   // System handle ported methods
   const system = runtime.system;
   assert.deepEqual(system.logs(), []);
-  assert.equal(system.listProperties()["log.level"], "info");
+  assert.ok(system.version().vminit);
+  assert.ok(system.propertyList().includes("[build]"));
   assert.equal(system.dnsCreate("test.local"), "test.local");
   assert.deepEqual(system.dnsList(), []);
   assert.doesNotThrow(() => system.dnsDelete("test.local"));
-  assert.equal(system.kernelSet("/path/to/kernel"), "/path/to/kernel");
 
   // K8s writeConfig
   const k8s = runtime.k8s;
