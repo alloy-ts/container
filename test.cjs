@@ -7,6 +7,10 @@ const {
   JsBuildTransfer,
   JsImageTransfer,
   JsServerStream,
+  JsBuilderCommand,
+  JsBuildFile,
+  JsBufferedCopyReader,
+  JsBuildFSSync,
 } = require("./build/index.js");
 
 test("JsContainer withDefaultConfig and create container", async () => {
@@ -100,6 +104,32 @@ test("JsEfiVarStore initialization and setup mode", () => {
   const store = new JsEfiVarStore();
   assert.ok(store);
   assert.equal(typeof store.getSetupMode(), "boolean");
+});
+
+test("JsBuilderCommand, JsBuildFile, JsBufferedCopyReader, and JsBuildFSSync functionality", () => {
+  const cmd = new JsBuilderCommand();
+  const startRes = cmd.start({ cpus: 2, memory: "2GB" });
+  assert.equal(startRes.status, "started");
+  assert.equal(startRes.cpus, "2");
+
+  const statusRes = cmd.status({ quiet: true });
+  assert.equal(statusRes.status, "running");
+
+  const resolved = JsBuildFile.resolvePath(".");
+  assert.ok(resolved === null || typeof resolved === "string");
+
+  const reader = new JsBufferedCopyReader("non_existent_file.txt", 1024);
+  assert.equal(reader.hasFinished, true);
+  assert.equal(reader.nextChunk(), null);
+
+  const fsSync = new JsBuildFSSync("/tmp");
+  const readRes = fsSync.read("Dockerfile", 0, 100);
+  assert.equal(readRes.method, "Read");
+  assert.equal(readRes.source, "Dockerfile");
+
+  const walkRes = fsSync.walk(["src/*"]);
+  assert.equal(walkRes.method, "Walk");
+  assert.equal(walkRes.follow_paths, "src/*");
 });
 
 test("JsBuildTransfer and JsImageTransfer ported helper methods", () => {

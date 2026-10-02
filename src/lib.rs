@@ -4,6 +4,12 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use virtfw_varstore::store::EfiVarStore;
 
+pub mod build;
+pub use build::*;
+
+pub mod cli;
+pub use cli::*;
+
 #[napi(object)]
 #[derive(Clone, Debug, Default)]
 pub struct JsOptions {

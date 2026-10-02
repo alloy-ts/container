@@ -10,6 +10,10 @@ export const JsNetworkHandle = native.JsNetworkHandle;
 export const JsRegistryHandle = native.JsRegistryHandle;
 export const JsSystemHandle = native.JsSystemHandle;
 export const JsBuilderHandle = native.JsBuilderHandle;
+export const JsBuilderCommand = native.JsBuilderCommand;
+export const JsBuildFile = native.JsBuildFile;
+export const JsBufferedCopyReader = native.JsBufferedCopyReader;
+export const JsBuildFSSync = native.JsBuildFSSync;
 export const JsEfiVarStore = native.JsEfiVarStore;
 
 export const JsBuildTransfer = native.JsBuildTransfer;

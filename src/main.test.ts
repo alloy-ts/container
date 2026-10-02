@@ -1,5 +1,8 @@
 import { expect, test } from "vite-plus/test";
 import {
+  JsBuilderCommand,
+  JsBuildFSSync,
+  JsBuildFile,
   JsBuildTransfer,
   JsContainer,
   JsEfiVarStore,
@@ -38,6 +41,17 @@ test("JsContainer sub-handles accessible", () => {
   expect(runtime.builder).toBeDefined();
   expect(runtime.compose).toBeDefined();
   expect(runtime.compose.system).toBeDefined();
+});
+
+test("JsBuilderCommand, JsBuildFile, and JsBuildFSSync work in TS", () => {
+  const cmd = new JsBuilderCommand();
+  expect(cmd.status().status).toBe("running");
+
+  const resolved = JsBuildFile.resolvePath(".");
+  expect(resolved === null || typeof resolved === "string").toBe(true);
+
+  const fsSync = new JsBuildFSSync("/app");
+  expect(fsSync.info("Dockerfile").method).toBe("Info");
 });
 
 test("JsEfiVarStore initializes", () => {
