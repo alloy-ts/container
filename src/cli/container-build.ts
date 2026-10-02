@@ -19,3 +19,19 @@ export class ContainerBuildHandler {
 
 export const handleContainerBuild = ContainerBuildHandler.handleBuild;
 export const ContainerBuild = ContainerBuildHandler;
+
+export namespace ContainerBuildNamespace {
+  export async function build(params: ContainerBuildParams = {}): Promise<string> {
+    return ContainerBuildHandler.handleBuild(params);
+  }
+}
+
+export namespace Container {
+  export const build = ContainerBuildNamespace.build;
+}
+
+declare global {
+  namespace Container {
+    export const build: typeof ContainerBuildNamespace.build;
+  }
+}

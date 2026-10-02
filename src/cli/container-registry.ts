@@ -53,6 +53,10 @@ export namespace Registry {
   }
 }
 
+export namespace Container {
+  export const registry = Registry;
+}
+
 declare global {
   namespace Container {
     export const registry: typeof Registry;

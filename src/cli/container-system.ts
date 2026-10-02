@@ -14,3 +14,19 @@ export class SystemHandler {
 }
 
 export const containerSystem = new SystemHandler();
+
+export namespace ContainerSystemNamespace {
+  export function getConfig(): Record<string, any> {
+    return containerSystem.getConfig();
+  }
+}
+
+export namespace Container {
+  export const system = ContainerSystemNamespace;
+}
+
+declare global {
+  namespace Container {
+    export const system: typeof ContainerSystemNamespace;
+  }
+}
