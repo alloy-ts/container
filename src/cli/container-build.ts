@@ -11,6 +11,11 @@ export class ContainerBuildHandler {
     const container = native.Container.withDefaultConfig();
     return container.images.build(contextDir, params);
   }
+
+  static async build(params: ContainerBuildParams = {}): Promise<string> {
+    return this.handleBuild(params);
+  }
 }
 
 export const handleContainerBuild = ContainerBuildHandler.handleBuild;
+export const ContainerBuild = ContainerBuildHandler;
