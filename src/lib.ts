@@ -1,47 +1,45 @@
 import native from "../build/index.js";
 
-export const JsContainer = native.JsContainer;
-export const JsGetOrCreateResult = native.JsGetOrCreateResult;
-export const JsImageHandle = native.JsImageHandle;
-export const JsVolumeHandle = native.JsVolumeHandle;
-export const JsMachineHandle = native.JsMachineHandle;
-export const JsK8sHandle = native.JsK8sHandle;
-export const JsNetworkHandle = native.JsNetworkHandle;
-export const JsRegistryHandle = native.JsRegistryHandle;
-export const JsSystemHandle = native.JsSystemHandle;
-export const JsBuilderHandle = native.JsBuilderHandle;
-export const JsEfiVarStore = native.JsEfiVarStore;
+export const Container = native.Container;
+export const GetOrCreateResult = native.GetOrCreateResult;
+export const ImageHandle = native.ImageHandle;
+export const VolumeHandle = native.VolumeHandle;
+export const MachineHandle = native.MachineHandle;
+export const K8sHandle = native.K8sHandle;
+export const NetworkHandle = native.NetworkHandle;
+export const RegistryHandle = native.RegistryHandle;
+export const SystemHandle = native.SystemHandle;
+export const BuilderHandle = native.BuilderHandle;
+export const EfiVarStore = native.EfiVarStore;
 
-export const JsBuildTransfer = native.JsBuildTransfer;
-export const JsImageTransfer = native.JsImageTransfer;
-export const JsServerStream = native.JsServerStream;
+export const BuildTransfer = native.BuildTransfer;
+export const ImageTransfer = native.ImageTransfer;
+export const ServerStream = native.ServerStream;
 
-export const JsComposeHandle = native.JsComposeHandle;
-export const JsComposeSystemHandle = native.JsComposeSystemHandle;
+export const ComposeHandle = native.ComposeHandle;
+export const ComposeSystemHandle = native.ComposeSystemHandle;
 
-export const JsHealthState = {
+export const HealthState = {
   None: "None",
   Starting: "Starting",
   Healthy: "Healthy",
   Unhealthy: "Unhealthy",
 } as const;
 
-export type JsHealthState = (typeof JsHealthState)[keyof typeof JsHealthState];
+export type HealthState = (typeof HealthState)[keyof typeof HealthState];
 
-export const Container = native.JsContainer;
-
-export type JsBuildOptions = {
+export type BuildOptions = {
   dockerfile?: string;
   target?: string;
   buildArgs?: Record<string, string>;
   tags?: string[];
 };
 
-export type JsOptions = {
+export type Options = {
   homeDir?: string;
 };
 
-export type JsContainerOptions = {
+export type ContainerOptions = {
   image?: string;
   memoryMib?: number;
   cpus?: number;
@@ -54,85 +52,85 @@ export type JsContainerOptions = {
   tty?: boolean;
 };
 
-export type JsContainerRestOptions = {
+export type ContainerRestOptions = {
   endpoint?: string;
 };
 
-export type JsPublishedPort = {
+export type PublishedPort = {
   guestPort: number;
   hostIp: string;
   hostPort: number;
   protocol: string;
 };
 
-export type JsOutboundNetworkInfo = {
+export type OutboundNetworkInfo = {
   mode: string;
   allowNet: string[];
 };
 
-export type JsInboundNetworkInfo = {
+export type InboundNetworkInfo = {
   mode: string;
   allowNet: string[];
 };
 
-export type JsNetworkInfo = {
-  outbound: JsOutboundNetworkInfo;
-  inbound: JsInboundNetworkInfo;
+export type NetworkInfo = {
+  outbound: OutboundNetworkInfo;
+  inbound: InboundNetworkInfo;
   mode: string;
   allowNet: string[];
-  publishedPorts?: JsPublishedPort[] | null;
+  publishedPorts?: PublishedPort[] | null;
 };
 
-export type JsHealthStatus = {
-  state: JsHealthState;
+export type HealthStatus = {
+  state: HealthState;
   failures: number;
   lastCheck?: string | null;
 };
 
-export type JsContainerStateInfo = {
+export type ContainerStateInfo = {
   status: string;
   running: boolean;
   pid?: number | null;
   exitCode?: number | null;
 };
 
-export type JsContainerInfo = {
+export type ContainerInfo = {
   id: string;
   name?: string | null;
-  state: JsContainerStateInfo;
+  state: ContainerStateInfo;
   createdAt: string;
   startedAt?: string | null;
   lastActivityAt?: string | null;
   image: string;
   cpus: number;
   memoryMib: number;
-  network?: JsNetworkInfo | null;
+  network?: NetworkInfo | null;
   autoStop: number;
   autoDelete: number;
   autoResume: boolean;
-  healthStatus: JsHealthStatus;
+  healthStatus: HealthStatus;
 };
 
-export type JsRuntimeMetrics = {
+export type RuntimeMetrics = {
   containeresCreatedTotal: number;
   numRunningContaineres: number;
 };
 
-export type JsIo = {
+export type Io = {
   data: Uint8Array;
 };
 
-export type JsInfoRequest = {
+export type InfoRequest = {
   id: string;
 };
 
-export type JsInfoResponse = {
+export type InfoResponse = {
   id: string;
   status: string;
 };
 
-export type JsClientStream = {
+export type ClientStream = {
   data: Uint8Array;
 };
 
-export default JsContainer;
+export default Container;
