@@ -13,4 +13,10 @@ export class ContainerBuildHandler {
   }
 }
 
+export class ContainerBuild {
+  static async build(params: ContainerBuildParams = {}): Promise<string> {
+    return ContainerBuildHandler.handleBuild(params);
+  }
+}
+
 export const handleContainerBuild = ContainerBuildHandler.handleBuild;
