@@ -1,12 +1,11 @@
 import { expect, test } from "vite-plus/test";
-import { Registry } from "./container-registry.ts";
+import { Container } from "./container-registry.ts";
 
-test("Registry login and logout work", () => {
-  expect(() => Registry.login("docker.io", "user", "secret")).not.toThrow();
-  expect(() => Registry.logout("docker.io")).not.toThrow();
-});
+test("Container.registry function works", () => {
+  const reg = Container.registry();
+  expect(reg).toBeDefined();
 
-test("Registry list returns array of logins", () => {
-  const logins = Registry.list();
-  expect(Array.isArray(logins)).toBe(true);
+  expect(() => reg.login("docker.io", "user", "pass")).not.toThrow();
+  expect(() => reg.logout("docker.io")).not.toThrow();
+  expect(Array.isArray(reg.list())).toBe(true);
 });

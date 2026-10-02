@@ -873,6 +873,7 @@ dependencies = [
  "napi-derive",
  "runtime-rs",
  "seccompiler",
+ "serde",
  "vfio-bindings",
  "vfio-ioctls",
  "virtfw-varstore",
