@@ -607,18 +607,24 @@ pub struct RegistryHandle {}
 #[napi]
 impl RegistryHandle {
   #[napi]
-  pub fn login(&self, _server: String, _username: Option<String>, _password: Option<String>) -> Result<()> {
-    Ok(())
+  pub fn login(&self, server: String, username: Option<String>, password: Option<String>) -> Result<String> {
+    registry_login(RegistryLoginOptions {
+      server,
+      username,
+      password,
+      password_stdin: None,
+      scheme: None,
+    })
   }
 
   #[napi]
-  pub fn logout(&self, _server: String) -> Result<()> {
-    Ok(())
+  pub fn logout(&self, server: String) -> Result<()> {
+    registry_logout(server)
   }
 
   #[napi]
-  pub fn list(&self) -> Vec<String> {
-    vec![]
+  pub fn list(&self) -> Result<Vec<RegistryResource>> {
+    registry_list()
   }
 }
 

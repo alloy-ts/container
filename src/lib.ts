@@ -145,5 +145,6 @@ export {
 } from "./cli/container-build.ts";
 export { ContainerCliHandler } from "./cli/container.ts";
 export { ContainerComposeCliHandler } from "./cli/container-compose.ts";
+export { ContainerRegistryHandler, Registry } from "./cli/container-registry.ts";
 
 export default Container;

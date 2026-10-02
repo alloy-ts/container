@@ -49,6 +49,10 @@ test("Container sub-handles (machines, k8s, network, registry, system, compose)"
   const net = runtime.network.create("custom-net");
   assert.equal(net, "custom-net");
 
+  assert.doesNotThrow(() => runtime.registry.login("ghcr.io", "user", "pass"));
+  assert.ok(runtime.registry.list().length >= 1);
+  assert.doesNotThrow(() => runtime.registry.logout("ghcr.io"));
+
   const sysStatus = runtime.system.status();
   assert.equal(sysStatus, "running");
 
