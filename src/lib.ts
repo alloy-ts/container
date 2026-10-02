@@ -9,6 +9,7 @@ export const JsK8sHandle = native.JsK8sHandle;
 export const JsNetworkHandle = native.JsNetworkHandle;
 export const JsRegistryHandle = native.JsRegistryHandle;
 export const JsSystemHandle = native.JsSystemHandle;
+export const JsBuilderHandle = native.JsBuilderHandle;
 export const JsEfiVarStore = native.JsEfiVarStore;
 
 export const JsBuildTransfer = native.JsBuildTransfer;
@@ -28,6 +29,13 @@ export const JsHealthState = {
 export type JsHealthState = (typeof JsHealthState)[keyof typeof JsHealthState];
 
 export const Container = native.JsContainer;
+
+export type JsBuildOptions = {
+  dockerfile?: string;
+  target?: string;
+  buildArgs?: Record<string, string>;
+  tags?: string[];
+};
 
 export type JsOptions = {
   homeDir?: string;

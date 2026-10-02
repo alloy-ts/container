@@ -121,6 +121,15 @@ pub struct JsContainerInfo {
 
 #[napi(object)]
 #[derive(Clone, Debug, Default)]
+pub struct JsBuildOptions {
+  pub dockerfile: Option<String>,
+  pub target: Option<String>,
+  pub build_args: Option<HashMap<String, String>>,
+  pub tags: Option<Vec<String>>,
+}
+
+#[napi(object)]
+#[derive(Clone, Debug, Default)]
 pub struct JsRuntimeMetrics {
   pub containeres_created_total: i64,
   pub num_running_containeres: i64,
@@ -379,6 +388,39 @@ impl JsImageHandle {
   pub fn prune(&self) -> Result<()> {
     Ok(())
   }
+
+  #[napi]
+  pub fn inspect(&self, references: Vec<String>) -> Result<Vec<HashMap<String, String>>> {
+    let mut results = Vec::new();
+    for r in references {
+      let mut map = HashMap::new();
+      map.insert("reference".to_string(), r);
+      map.insert("status".to_string(), "available".to_string());
+      results.push(map);
+    }
+    Ok(results)
+  }
+
+  #[napi]
+  pub fn load(&self, _archive_path: String, _force: Option<bool>) -> Result<Vec<String>> {
+    Ok(vec!["loaded-image:latest".to_string()])
+  }
+
+  #[napi]
+  pub fn save(&self, references: Vec<String>, _output_path: Option<String>, _platform: Option<String>) -> Result<Vec<u8>> {
+    let _ = references;
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn tag(&self, _source: String, target: String) -> Result<String> {
+    Ok(target)
+  }
+
+  #[napi]
+  pub fn build(&self, _context_dir: String, _options: Option<JsBuildOptions>) -> Result<String> {
+    Ok("image-built:latest".to_string())
+  }
 }
 
 #[napi]
@@ -405,6 +447,18 @@ impl JsVolumeHandle {
   #[napi]
   pub fn prune(&self) -> Result<()> {
     Ok(())
+  }
+
+  #[napi]
+  pub fn inspect(&self, names: Vec<String>) -> Result<Vec<HashMap<String, String>>> {
+    let mut results = Vec::new();
+    for name in names {
+      let mut map = HashMap::new();
+      map.insert("name".to_string(), name);
+      map.insert("driver".to_string(), "local".to_string());
+      results.push(map);
+    }
+    Ok(results)
   }
 }
 
@@ -437,6 +491,38 @@ impl JsMachineHandle {
   pub fn delete(&self, _id: String) -> Result<()> {
     Ok(())
   }
+
+  #[napi]
+  pub fn inspect(&self, id: String) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    map.insert("id".to_string(), id);
+    map.insert("state".to_string(), "running".to_string());
+    map.insert("cpus".to_string(), "2".to_string());
+    map.insert("memory".to_string(), "2048".to_string());
+    Ok(map)
+  }
+
+  #[napi]
+  pub fn logs(&self, _id: String, _follow: Option<bool>, _tail: Option<i32>, _boot: Option<bool>) -> Result<Vec<String>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn set(&self, id: Option<String>, _key_values: HashMap<String, String>) -> Result<String> {
+    Ok(id.unwrap_or_else(|| "default".to_string()))
+  }
+
+  #[napi]
+  pub fn set_default(&self, id: String) -> Result<String> {
+    Ok(id)
+  }
+
+  #[napi]
+  pub fn capabilities(&self) -> Result<HashMap<String, bool>> {
+    let mut map = HashMap::new();
+    map.insert("nestedVirtualization".to_string(), true);
+    Ok(map)
+  }
 }
 
 #[napi(js_name = "JsK8sHandle")]
@@ -462,6 +548,11 @@ impl JsK8sHandle {
   #[napi]
   pub fn load_image(&self, _image: String, _name: Option<String>) -> Result<()> {
     Ok(())
+  }
+
+  #[napi]
+  pub fn write_config(&self, _name: Option<String>, kubeconfig: Option<String>) -> Result<String> {
+    Ok(kubeconfig.unwrap_or_else(|| "~/.kube/config".to_string()))
   }
 }
 
@@ -489,6 +580,18 @@ impl JsNetworkHandle {
   pub fn prune(&self) -> Result<()> {
     Ok(())
   }
+
+  #[napi]
+  pub fn inspect(&self, names: Vec<String>) -> Result<Vec<HashMap<String, String>>> {
+    let mut results = Vec::new();
+    for name in names {
+      let mut map = HashMap::new();
+      map.insert("name".to_string(), name);
+      map.insert("driver".to_string(), "bridge".to_string());
+      results.push(map);
+    }
+    Ok(results)
+  }
 }
 
 #[napi]
@@ -509,6 +612,35 @@ impl JsRegistryHandle {
   #[napi]
   pub fn list(&self) -> Vec<String> {
     vec![]
+  }
+}
+
+#[napi]
+pub struct JsBuilderHandle {}
+
+#[napi]
+impl JsBuilderHandle {
+  #[napi]
+  pub fn start(&self) -> Result<String> {
+    Ok("buildkit".to_string())
+  }
+
+  #[napi]
+  pub fn stop(&self) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn status(&self) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    map.insert("id".to_string(), "buildkit".to_string());
+    map.insert("status".to_string(), "running".to_string());
+    Ok(map)
+  }
+
+  #[napi]
+  pub fn delete(&self, _force: Option<bool>) -> Result<()> {
+    Ok(())
   }
 }
 
@@ -545,6 +677,38 @@ impl JsSystemHandle {
     let mut map = HashMap::new();
     map.insert("reclaimable".to_string(), "0B".to_string());
     Ok(map)
+  }
+
+  #[napi]
+  pub fn logs(&self, _follow: Option<bool>, _last: Option<String>) -> Result<Vec<String>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn list_properties(&self) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    map.insert("log.level".to_string(), "info".to_string());
+    Ok(map)
+  }
+
+  #[napi]
+  pub fn dns_create(&self, domain: String, _ip: Option<String>) -> Result<String> {
+    Ok(domain)
+  }
+
+  #[napi]
+  pub fn dns_list(&self) -> Result<Vec<HashMap<String, String>>> {
+    Ok(vec![])
+  }
+
+  #[napi]
+  pub fn dns_delete(&self, _domain: String) -> Result<()> {
+    Ok(())
+  }
+
+  #[napi]
+  pub fn kernel_set(&self, path: String) -> Result<String> {
+    Ok(path)
   }
 }
 
@@ -1075,6 +1239,28 @@ impl JsContainer {
   }
 
   #[napi]
+  pub async fn prune(&self) -> Result<Vec<String>> {
+    let mut state = self
+      .inner
+      .lock()
+      .map_err(|e| Error::from_reason(e.to_string()))?;
+    let stopped_ids: Vec<String> = state
+      .containers
+      .iter()
+      .filter(|(_, info)| info.state.status == "stopped")
+      .map(|(id, _)| id.clone())
+      .collect();
+    for id in &stopped_ids {
+      if let Some(info) = state.containers.remove(id) {
+        if let Some(ref name) = info.name {
+          state.containers.remove(name);
+        }
+      }
+    }
+    Ok(stopped_ids)
+  }
+
+  #[napi]
   pub async fn copy(&self, _src: String, _dest: String) -> Result<()> {
     Ok(())
   }
@@ -1213,6 +1399,11 @@ impl JsContainer {
   #[napi(getter)]
   pub fn system(&self) -> Result<JsSystemHandle> {
     Ok(JsSystemHandle {})
+  }
+
+  #[napi(getter)]
+  pub fn builder(&self) -> Result<JsBuilderHandle> {
+    Ok(JsBuilderHandle {})
   }
 
   #[napi(getter)]
