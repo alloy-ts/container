@@ -4,6 +4,9 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use virtfw_varstore::store::EfiVarStore;
 
+pub mod cli;
+use cli::{BuilderCli, ComposeCli, ContainerCli};
+
 #[napi(object)]
 #[derive(Clone, Debug, Default)]
 pub struct JsOptions {
@@ -418,8 +421,10 @@ impl JsImageHandle {
   }
 
   #[napi]
-  pub fn build(&self, _context_dir: String, _options: Option<JsBuildOptions>) -> Result<String> {
-    Ok("image-built:latest".to_string())
+  pub fn build(&self, context_dir: String, options: Option<JsBuildOptions>) -> Result<String> {
+    let dockerfile = options.as_ref().and_then(|o| o.dockerfile.as_deref());
+    let tags = options.as_ref().and_then(|o| o.tags.clone()).unwrap_or_default();
+    ContainerCli::build(&context_dir, dockerfile, tags)
   }
 }
 
@@ -622,25 +627,22 @@ pub struct JsBuilderHandle {}
 impl JsBuilderHandle {
   #[napi]
   pub fn start(&self) -> Result<String> {
-    Ok("buildkit".to_string())
+    BuilderCli::start()
   }
 
   #[napi]
   pub fn stop(&self) -> Result<()> {
-    Ok(())
+    BuilderCli::stop()
   }
 
   #[napi]
   pub fn status(&self) -> Result<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    map.insert("id".to_string(), "buildkit".to_string());
-    map.insert("status".to_string(), "running".to_string());
-    Ok(map)
+    BuilderCli::status()
   }
 
   #[napi]
-  pub fn delete(&self, _force: Option<bool>) -> Result<()> {
-    Ok(())
+  pub fn delete(&self, force: Option<bool>) -> Result<()> {
+    BuilderCli::delete(force.unwrap_or(false))
   }
 }
 
@@ -719,7 +721,7 @@ pub struct JsComposeSystemHandle {}
 impl JsComposeSystemHandle {
   #[napi]
   pub fn status(&self, _socket: Option<String>, _address: Option<String>) -> Result<String> {
-    Ok("container-compose daemon running".to_string())
+    ComposeCli::status()
   }
 
   #[napi]
@@ -729,10 +731,7 @@ impl JsComposeSystemHandle {
 
   #[napi]
   pub fn generate_cert(&self, _out_dir: Option<String>, _cn: Option<String>, _days: Option<i32>) -> Result<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    map.insert("cert".to_string(), "cert.pem".to_string());
-    map.insert("key".to_string(), "key.pem".to_string());
-    Ok(map)
+    ComposeCli::generate_cert()
   }
 
   #[napi]
@@ -863,7 +862,7 @@ impl JsComposeHandle {
 
   #[napi]
   pub fn version(&self) -> Result<String> {
-    Ok("container-compose v1.0.0".to_string())
+    ComposeCli::version()
   }
 
   #[napi(getter)]

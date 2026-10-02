@@ -59,6 +59,22 @@ test("JsContainer new CLI methods work", async () => {
   expect(runtime.builder.start()).toBe("buildkit");
 });
 
+test("ContainerBuildHandler and CLI handlers work", async () => {
+  const { ContainerBuildHandler, ContainerCliHandler, ContainerComposeCliHandler } =
+    await import("./lib.ts");
+
+  const buildHandler = new ContainerBuildHandler();
+  const builtTag = await buildHandler.run({ contextDir: ".", tag: ["my-image:v1"] });
+  expect(builtTag).toBe("my-image:v1");
+
+  const cliHandler = new ContainerCliHandler();
+  const container = await cliHandler.runContainer({ image: "alpine" }, "cli-c1");
+  expect(container).toBeDefined();
+
+  const composeHandler = new ContainerComposeCliHandler();
+  expect(await composeHandler.version()).toContain("container-compose");
+});
+
 test("JsEfiVarStore initializes", () => {
   const store = new JsEfiVarStore();
   expect(store).toBeDefined();

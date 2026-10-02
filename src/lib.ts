@@ -135,4 +135,8 @@ export type JsClientStream = {
   data: Uint8Array;
 };
 
+export { ContainerBuildHandler, buildCommand } from "./cli/container-build.ts";
+export { ContainerCliHandler } from "./cli/container.ts";
+export { ContainerComposeCliHandler } from "./cli/container-compose.ts";
+
 export default JsContainer;
