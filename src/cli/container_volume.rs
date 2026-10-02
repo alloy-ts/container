@@ -1,40 +1,50 @@
+use napi::bindgen_prelude::*;
+use napi_derive::napi;
 use std::collections::HashMap;
 
+#[napi]
 #[derive(Clone, Debug, Default)]
 pub struct ContainerVolumeCliHandler;
 
+#[napi]
 impl ContainerVolumeCliHandler {
+  #[napi(constructor)]
   pub fn new() -> Self {
     Self
   }
 
-  pub fn create(&self, name: &str, _size: Option<&str>) -> Result<String, String> {
+  #[napi]
+  pub fn create(&self, name: String, _size: Option<String>) -> Result<String> {
     if name.is_empty() {
-      return Err("volume name cannot be empty".to_string());
+      return Err(Error::from_reason("volume name cannot be empty"));
     }
-    Ok(name.to_string())
+    Ok(name)
   }
 
+  #[napi]
   pub fn list(&self) -> Vec<String> {
     vec![]
   }
 
-  pub fn delete(&self, name: &str) -> Result<(), String> {
+  #[napi]
+  pub fn delete(&self, name: String) -> Result<()> {
     if name.is_empty() {
-      return Err("volume name cannot be empty".to_string());
+      return Err(Error::from_reason("volume name cannot be empty"));
     }
     Ok(())
   }
 
-  pub fn prune(&self) -> Result<(), String> {
+  #[napi]
+  pub fn prune(&self) -> Result<()> {
     Ok(())
   }
 
-  pub fn inspect(&self, names: &[String]) -> Result<Vec<HashMap<String, String>>, String> {
+  #[napi]
+  pub fn inspect(&self, names: Vec<String>) -> Result<Vec<HashMap<String, String>>> {
     let mut results = Vec::new();
     for name in names {
       let mut map = HashMap::new();
-      map.insert("name".to_string(), name.clone());
+      map.insert("name".to_string(), name);
       map.insert("driver".to_string(), "local".to_string());
       results.push(map);
     }

@@ -1,50 +1,58 @@
+use napi::bindgen_prelude::*;
+use napi_derive::napi;
 use std::collections::HashMap;
 
+#[napi(object)]
 #[derive(Clone, Debug, Default)]
 pub struct RegistryLoginOptions {
   pub server: String,
-  pub username: String,
-  pub password_stdin: bool,
+  pub username: Option<String>,
+  pub password: Option<String>,
+  pub password_stdin: Option<bool>,
   pub scheme: Option<String>,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct RegistryLogoutOptions {
-  pub registry: String,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct RegistryListOptions {
-  pub format: String,
-  pub quiet: bool,
-}
-
+#[napi]
 #[derive(Clone, Debug, Default)]
 pub struct ContainerRegistryCliHandler;
 
+#[napi]
 impl ContainerRegistryCliHandler {
+  #[napi(constructor)]
   pub fn new() -> Self {
     Self
   }
 
-  pub fn login(&self, server: &str, username: Option<&str>, password_stdin: bool) -> Result<(), String> {
-    if password_stdin && (username.is_none() || username.unwrap().is_empty()) {
-      return Err("must provide --username with --password-stdin".to_string());
+  #[napi]
+  pub fn login(
+    &self,
+    server: String,
+    username: Option<String>,
+    password: Option<String>,
+    password_stdin: Option<bool>,
+  ) -> Result<()> {
+    if password_stdin.unwrap_or(false) && (username.as_deref().unwrap_or("").is_empty()) {
+      return Err(Error::from_reason(
+        "must provide --username with --password-stdin",
+      ));
     }
     if server.is_empty() {
-      return Err("registry server cannot be empty".to_string());
+      return Err(Error::from_reason("registry server cannot be empty"));
     }
+    let _ = password;
     Ok(())
   }
 
-  pub fn logout(&self, registry: &str) -> Result<(), String> {
+  #[napi]
+  pub fn logout(&self, registry: String) -> Result<()> {
     if registry.is_empty() {
-      return Err("registry server cannot be empty".to_string());
+      return Err(Error::from_reason("registry server cannot be empty"));
     }
     Ok(())
   }
 
-  pub fn list(&self, _quiet: bool) -> Vec<HashMap<String, String>> {
+  #[napi]
+  pub fn list(&self, _quiet: Option<bool>) -> Vec<HashMap<String, String>> {
     vec![]
   }
 }

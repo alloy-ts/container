@@ -17,7 +17,9 @@ test("ContainerSystem programmable NAPI bindings", async () => {
   assert.ok(Array.isArray(logs));
 
   const props = await ContainerSystem.listProperties();
-  assert.equal(props["log.level"], "info");
+  assert.equal(props["build.cpus"], "2");
+  assert.equal(props["container.cpus"], "4");
+  assert.equal(props["registry.domain"], "docker.io");
 
   const domain = await ContainerSystem.dnsCreate("test.local");
   assert.equal(domain, "test.local");

@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod config;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -620,17 +621,21 @@ pub struct RegistryHandle {}
 #[napi]
 impl RegistryHandle {
   #[napi]
-  pub fn login(&self, _server: String, _username: Option<String>, _password: Option<String>) -> Result<()> {
-    Ok(())
+  pub fn login(&self, server: String, username: Option<String>, password: Option<String>) -> Result<()> {
+    let handler = crate::cli::container_registry::ContainerRegistryCliHandler::new();
+    handler.login(server, username, password, None)
   }
 
   #[napi]
-  pub fn logout(&self, _server: String) -> Result<()> {
-    Ok(())
+  pub fn logout(&self, server: String) -> Result<()> {
+    let handler = crate::cli::container_registry::ContainerRegistryCliHandler::new();
+    handler.logout(server)
   }
 
   #[napi]
   pub fn list(&self) -> Vec<String> {
+    let handler = crate::cli::container_registry::ContainerRegistryCliHandler::new();
+    let _ = handler.list(None);
     vec![]
   }
 }
@@ -706,9 +711,8 @@ impl SystemHandle {
 
   #[napi]
   pub fn list_properties(&self) -> Result<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    map.insert("log.level".to_string(), "info".to_string());
-    Ok(map)
+    let handler = crate::cli::container_system::ContainerSystemCliHandler::new();
+    Ok(handler.list_properties())
   }
 
   #[napi]

@@ -1,61 +1,77 @@
+use napi::bindgen_prelude::*;
+use napi_derive::napi;
 use std::collections::HashMap;
 
+#[napi]
 #[derive(Clone, Debug, Default)]
 pub struct ContainerMachineCliHandler;
 
+#[napi]
 impl ContainerMachineCliHandler {
+  #[napi(constructor)]
   pub fn new() -> Self {
     Self
   }
 
-  pub fn create(&self, image: &str, name: Option<&str>) -> Result<String, String> {
+  #[napi]
+  pub fn create(&self, image: String, name: Option<String>) -> Result<String> {
     if image.is_empty() {
-      return Err("image cannot be empty".to_string());
+      return Err(Error::from_reason("image cannot be empty"));
     }
-    Ok(format!("machine_{}", name.unwrap_or(image)))
+    let machine_name = name.unwrap_or(image);
+    Ok(format!("machine_{machine_name}"))
   }
 
-  pub fn run(&self, _executable: Option<&str>, _args: &[String]) -> Result<i32, String> {
+  #[napi]
+  pub fn run(&self, _executable: Option<String>, _args: Option<Vec<String>>) -> Result<i32> {
     Ok(0)
   }
 
+  #[napi]
   pub fn list(&self) -> Vec<String> {
     vec![]
   }
 
-  pub fn stop(&self, id: &str) -> Result<(), String> {
+  #[napi]
+  pub fn stop(&self, id: String) -> Result<()> {
     if id.is_empty() {
-      return Err("machine id cannot be empty".to_string());
+      return Err(Error::from_reason("machine id cannot be empty"));
     }
     Ok(())
   }
 
-  pub fn delete(&self, id: &str) -> Result<(), String> {
+  #[napi]
+  pub fn delete(&self, id: String) -> Result<()> {
     if id.is_empty() {
-      return Err("machine id cannot be empty".to_string());
+      return Err(Error::from_reason("machine id cannot be empty"));
     }
     Ok(())
   }
 
-  pub fn inspect(&self, id: &str) -> Result<HashMap<String, String>, String> {
+  #[napi]
+  pub fn inspect(&self, id: String) -> Result<HashMap<String, String>> {
     let mut map = HashMap::new();
-    map.insert("id".to_string(), id.to_string());
+    map.insert("id".to_string(), id);
     map.insert("state".to_string(), "running".to_string());
     Ok(map)
   }
 
-  pub fn logs(&self, _id: &str, _follow: bool, _tail: Option<i32>) -> Vec<String> {
+  #[napi]
+  pub fn logs(&self, _id: String, _follow: Option<bool>, _tail: Option<i32>) -> Vec<String> {
     vec![]
   }
 
-  pub fn set(&self, id: Option<&str>, _key_values: HashMap<String, String>) -> String {
-    id.unwrap_or("default").to_string()
+  #[napi]
+  pub fn set(&self, id: Option<String>, _key_values: HashMap<String, String>) -> String {
+    id.unwrap_or_else(|| "default".to_string())
   }
 
-  pub fn set_default(&self, id: &str) -> String {
-    id.to_string()
+  #[napi]
+  pub fn set_default(&self, id: String) -> String {
+    id
   }
 
+  #[napi]
   pub fn capabilities(&self) -> HashMap<String, bool> {
     let mut map = HashMap::new();
     map.insert("nestedVirtualization".to_string(), true);
