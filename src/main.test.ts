@@ -35,8 +35,28 @@ test("JsContainer sub-handles accessible", () => {
   expect(runtime.network).toBeDefined();
   expect(runtime.registry).toBeDefined();
   expect(runtime.system).toBeDefined();
+  expect(runtime.builder).toBeDefined();
   expect(runtime.compose).toBeDefined();
   expect(runtime.compose.system).toBeDefined();
+});
+
+test("JsContainer new CLI methods work", async () => {
+  const runtime = JsContainer.withDefaultConfig();
+
+  const container = await runtime.create({ image: "alpine" }, "c1");
+  await container.start();
+  await container.stop();
+
+  const pruned = await runtime.prune();
+  expect(pruned).toContain("cnt_c1");
+
+  expect(runtime.images.inspect(["alpine"])).toBeDefined();
+  expect(runtime.images.load("a.tar")).toEqual(["loaded-image:latest"]);
+  expect(runtime.images.tag("a", "b")).toBe("b");
+
+  expect(runtime.machines.capabilities().nestedVirtualization).toBe(true);
+  expect(runtime.system.dnsCreate("test.local")).toBe("test.local");
+  expect(runtime.builder.start()).toBe("buildkit");
 });
 
 test("JsEfiVarStore initializes", () => {

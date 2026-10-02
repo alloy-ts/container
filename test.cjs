@@ -55,6 +55,64 @@ test("JsContainer sub-handles (machines, k8s, network, registry, system, compose
   assert.ok(composeSysStatus.includes("daemon running"));
 });
 
+test("JsContainer ported CLI methods and sub-handles", async () => {
+  const runtime = JsContainer.withDefaultConfig();
+
+  // Container prune
+  const box = await runtime.create({ image: "alpine:latest" }, "prune-box");
+  await box.start();
+  await box.stop();
+  const pruned = await runtime.prune();
+  assert.ok(Array.isArray(pruned));
+  assert.ok(pruned.includes("cnt_prune-box"));
+
+  // Builder handle
+  const builder = runtime.builder;
+  assert.equal(builder.start(), "buildkit");
+  assert.equal(builder.status().status, "running");
+  assert.doesNotThrow(() => builder.stop());
+  assert.doesNotThrow(() => builder.delete(true));
+
+  // Image handle ported methods
+  const images = runtime.images;
+  assert.deepEqual(images.inspect(["alpine:latest"]), [
+    { reference: "alpine:latest", status: "available" },
+  ]);
+  assert.deepEqual(images.load("archive.tar"), ["loaded-image:latest"]);
+  assert.ok(Array.isArray(images.save(["alpine:latest"])));
+  assert.equal(images.tag("alpine:latest", "alpine:v1"), "alpine:v1");
+  assert.equal(images.build("./"), "image-built:latest");
+
+  // Machine handle ported methods
+  const machines = runtime.machines;
+  assert.equal(machines.inspect("m1").state, "running");
+  assert.deepEqual(machines.logs("m1"), []);
+  assert.equal(machines.set("m1", { cpus: "4" }), "m1");
+  assert.equal(machines.setDefault("m1"), "m1");
+  assert.equal(machines.capabilities().nestedVirtualization, true);
+
+  // Volume handle inspect
+  const volumes = runtime.volumes;
+  assert.deepEqual(volumes.inspect(["vol1"]), [{ name: "vol1", driver: "local" }]);
+
+  // Network handle inspect
+  const network = runtime.network;
+  assert.deepEqual(network.inspect(["net1"]), [{ name: "net1", driver: "bridge" }]);
+
+  // System handle ported methods
+  const system = runtime.system;
+  assert.deepEqual(system.logs(), []);
+  assert.equal(system.listProperties()["log.level"], "info");
+  assert.equal(system.dnsCreate("test.local"), "test.local");
+  assert.deepEqual(system.dnsList(), []);
+  assert.doesNotThrow(() => system.dnsDelete("test.local"));
+  assert.equal(system.kernelSet("/path/to/kernel"), "/path/to/kernel");
+
+  // K8s writeConfig
+  const k8s = runtime.k8s;
+  assert.equal(k8s.writeConfig("k8s-dev"), "~/.kube/config");
+});
+
 test("JsEfiVarStore initialization and setup mode", () => {
   const store = new JsEfiVarStore();
   assert.ok(store);
