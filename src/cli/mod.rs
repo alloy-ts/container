@@ -3,3 +3,7 @@ pub mod container_compose;
 pub mod container_build;
 pub mod container_registry;
 pub mod container_system;
+pub mod container_network;
+pub mod container_image;
+pub mod container_volume;
+pub mod container_machine;

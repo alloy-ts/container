@@ -371,61 +371,53 @@ pub struct ImageHandle {}
 #[napi]
 impl ImageHandle {
   #[napi]
-  pub fn list(&self) -> Vec<String> {
-    vec![]
+  pub fn list(&self) -> Result<Vec<String>> {
+    crate::cli::container_image::handle_image_list()
   }
 
   #[napi]
-  pub fn pull(&self, _reference: String) -> Result<()> {
-    Ok(())
+  pub fn pull(&self, reference: String) -> Result<()> {
+    crate::cli::container_image::handle_image_pull(crate::cli::container_image::ImagePullOptions { reference })
   }
 
   #[napi]
-  pub fn push(&self, _reference: String) -> Result<()> {
-    Ok(())
+  pub fn push(&self, reference: String) -> Result<()> {
+    crate::cli::container_image::handle_image_push(crate::cli::container_image::ImagePushOptions { reference })
   }
 
   #[napi]
-  pub fn delete(&self, _reference: String) -> Result<()> {
-    Ok(())
+  pub fn delete(&self, reference: String) -> Result<()> {
+    crate::cli::container_image::handle_image_delete(crate::cli::container_image::ImageDeleteOptions { reference })
   }
 
   #[napi]
   pub fn prune(&self) -> Result<()> {
-    Ok(())
+    crate::cli::container_image::handle_image_prune()
   }
 
   #[napi]
   pub fn inspect(&self, references: Vec<String>) -> Result<Vec<HashMap<String, String>>> {
-    let mut results = Vec::new();
-    for r in references {
-      let mut map = HashMap::new();
-      map.insert("reference".to_string(), r);
-      map.insert("status".to_string(), "available".to_string());
-      results.push(map);
-    }
-    Ok(results)
+    crate::cli::container_image::handle_image_inspect(crate::cli::container_image::ImageInspectOptions { references })
   }
 
   #[napi]
-  pub fn load(&self, _archive_path: String, _force: Option<bool>) -> Result<Vec<String>> {
-    Ok(vec!["loaded-image:latest".to_string()])
+  pub fn load(&self, archive_path: String, force: Option<bool>) -> Result<Vec<String>> {
+    crate::cli::container_image::handle_image_load(crate::cli::container_image::ImageLoadOptions { archive_path, force })
   }
 
   #[napi]
-  pub fn save(&self, references: Vec<String>, _output_path: Option<String>, _platform: Option<String>) -> Result<Vec<u8>> {
-    let _ = references;
-    Ok(vec![])
+  pub fn save(&self, references: Vec<String>, output_path: Option<String>, platform: Option<String>) -> Result<Vec<u8>> {
+    crate::cli::container_image::handle_image_save(crate::cli::container_image::ImageSaveOptions { references, output_path, platform })
   }
 
   #[napi]
-  pub fn tag(&self, _source: String, target: String) -> Result<String> {
-    Ok(target)
+  pub fn tag(&self, source: String, target: String) -> Result<String> {
+    crate::cli::container_image::handle_image_tag(crate::cli::container_image::ImageTagOptions { source, target })
   }
 
   #[napi]
   pub fn build(&self, context_dir: String, options: Option<BuildOptions>) -> Result<String> {
-    crate::cli::container_build::handle_container_build(context_dir, options)
+    crate::cli::container_image::handle_image_build(context_dir, options)
   }
 }
 
@@ -435,36 +427,28 @@ pub struct VolumeHandle {}
 #[napi]
 impl VolumeHandle {
   #[napi]
-  pub fn list(&self) -> Vec<String> {
-    vec![]
+  pub fn list(&self) -> Result<Vec<String>> {
+    crate::cli::container_volume::handle_volume_list()
   }
 
   #[napi]
-  pub fn create(&self, name: String, _size: Option<String>) -> Result<String> {
-    Ok(name)
+  pub fn create(&self, name: String, size: Option<String>) -> Result<String> {
+    crate::cli::container_volume::handle_volume_create(crate::cli::container_volume::VolumeCreateOptions { name, size })
   }
 
   #[napi]
   pub fn delete(&self, name: String) -> Result<()> {
-    let _ = name;
-    Ok(())
+    crate::cli::container_volume::handle_volume_delete(crate::cli::container_volume::VolumeDeleteOptions { name })
   }
 
   #[napi]
   pub fn prune(&self) -> Result<()> {
-    Ok(())
+    crate::cli::container_volume::handle_volume_prune()
   }
 
   #[napi]
   pub fn inspect(&self, names: Vec<String>) -> Result<Vec<HashMap<String, String>>> {
-    let mut results = Vec::new();
-    for name in names {
-      let mut map = HashMap::new();
-      map.insert("name".to_string(), name);
-      map.insert("driver".to_string(), "local".to_string());
-      results.push(map);
-    }
-    Ok(results)
+    crate::cli::container_volume::handle_volume_inspect(crate::cli::container_volume::VolumeInspectOptions { names })
   }
 }
 
@@ -474,60 +458,53 @@ pub struct MachineHandle {}
 #[napi]
 impl MachineHandle {
   #[napi]
-  pub fn create(&self, image: String, _name: Option<String>) -> Result<String> {
-    Ok(format!("machine_{image}"))
+  pub fn create(&self, image: String, name: Option<String>) -> Result<String> {
+    crate::cli::container_machine::handle_machine_create(crate::cli::container_machine::MachineCreateOptions { image, name })
   }
 
   #[napi]
-  pub fn run(&self, _executable: Option<String>, _args: Option<Vec<String>>) -> Result<i32> {
-    Ok(0)
+  pub fn run(&self, executable: Option<String>, args: Option<Vec<String>>) -> Result<i32> {
+    crate::cli::container_machine::handle_machine_run(crate::cli::container_machine::MachineRunOptions { executable, args: args.unwrap_or_default() })
   }
 
   #[napi]
-  pub fn list(&self) -> Vec<String> {
-    vec![]
+  pub fn list(&self) -> Result<Vec<String>> {
+    crate::cli::container_machine::handle_machine_list()
   }
 
   #[napi]
-  pub fn stop(&self, _id: String) -> Result<()> {
-    Ok(())
+  pub fn stop(&self, id: String) -> Result<()> {
+    crate::cli::container_machine::handle_machine_stop(crate::cli::container_machine::MachineStopOptions { id })
   }
 
   #[napi]
-  pub fn delete(&self, _id: String) -> Result<()> {
-    Ok(())
+  pub fn delete(&self, id: String) -> Result<()> {
+    crate::cli::container_machine::handle_machine_delete(crate::cli::container_machine::MachineDeleteOptions { id })
   }
 
   #[napi]
   pub fn inspect(&self, id: String) -> Result<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    map.insert("id".to_string(), id);
-    map.insert("state".to_string(), "running".to_string());
-    map.insert("cpus".to_string(), "2".to_string());
-    map.insert("memory".to_string(), "2048".to_string());
-    Ok(map)
+    crate::cli::container_machine::handle_machine_inspect(crate::cli::container_machine::MachineInspectOptions { id })
   }
 
   #[napi]
-  pub fn logs(&self, _id: String, _follow: Option<bool>, _tail: Option<i32>, _boot: Option<bool>) -> Result<Vec<String>> {
-    Ok(vec![])
+  pub fn logs(&self, id: String, follow: Option<bool>, tail: Option<i32>, boot: Option<bool>) -> Result<Vec<String>> {
+    crate::cli::container_machine::handle_machine_logs(crate::cli::container_machine::MachineLogsOptions { id, follow, tail, boot })
   }
 
   #[napi]
-  pub fn set(&self, id: Option<String>, _key_values: HashMap<String, String>) -> Result<String> {
-    Ok(id.unwrap_or_else(|| "default".to_string()))
+  pub fn set(&self, id: Option<String>, key_values: HashMap<String, String>) -> Result<String> {
+    crate::cli::container_machine::handle_machine_set(crate::cli::container_machine::MachineSetOptions { id, key_values })
   }
 
   #[napi]
   pub fn set_default(&self, id: String) -> Result<String> {
-    Ok(id)
+    crate::cli::container_machine::handle_machine_set_default(id)
   }
 
   #[napi]
   pub fn capabilities(&self) -> Result<HashMap<String, bool>> {
-    let mut map = HashMap::new();
-    map.insert("nestedVirtualization".to_string(), true);
-    Ok(map)
+    crate::cli::container_machine::handle_machine_capabilities()
   }
 }
 
@@ -547,8 +524,8 @@ impl K8sHandle {
   }
 
   #[napi]
-  pub fn list(&self) -> Vec<String> {
-    vec!["k8s-dev".to_string()]
+  pub fn list(&self) -> Result<Vec<String>> {
+    Ok(vec!["k8s-dev".to_string()])
   }
 
   #[napi]
@@ -568,35 +545,28 @@ pub struct NetworkHandle {}
 #[napi]
 impl NetworkHandle {
   #[napi]
-  pub fn create(&self, name: String, _plugin: Option<String>, _subnet: Option<String>) -> Result<String> {
-    Ok(name)
+  pub fn create(&self, name: String, plugin: Option<String>, subnet: Option<String>) -> Result<String> {
+    crate::cli::container_network::handle_network_create(crate::cli::container_network::NetworkCreateOptions { name, plugin, subnet })
   }
 
   #[napi]
-  pub fn list(&self) -> Vec<String> {
-    vec!["default".to_string()]
+  pub fn list(&self) -> Result<Vec<String>> {
+    crate::cli::container_network::handle_network_list()
   }
 
   #[napi]
-  pub fn delete(&self, _name: String) -> Result<()> {
-    Ok(())
+  pub fn delete(&self, name: String) -> Result<()> {
+    crate::cli::container_network::handle_network_delete(crate::cli::container_network::NetworkDeleteOptions { name })
   }
 
   #[napi]
   pub fn prune(&self) -> Result<()> {
-    Ok(())
+    crate::cli::container_network::handle_network_prune()
   }
 
   #[napi]
   pub fn inspect(&self, names: Vec<String>) -> Result<Vec<HashMap<String, String>>> {
-    let mut results = Vec::new();
-    for name in names {
-      let mut map = HashMap::new();
-      map.insert("name".to_string(), name);
-      map.insert("driver".to_string(), "bridge".to_string());
-      results.push(map);
-    }
-    Ok(results)
+    crate::cli::container_network::handle_network_inspect(crate::cli::container_network::NetworkInspectOptions { names })
   }
 }
 
