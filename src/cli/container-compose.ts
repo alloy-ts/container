@@ -1,11 +1,11 @@
-import { JsComposeHandle, JsContainer } from "../lib.ts";
+import native from "../build/index.js";
 
 export class ContainerComposeCliHandler {
-  public runtime: JsContainer;
-  public compose: JsComposeHandle;
+  public runtime: InstanceType<typeof native.JsContainer>;
+  public compose: InstanceType<typeof native.JsComposeHandle>;
 
-  constructor(runtime?: JsContainer) {
-    this.runtime = runtime ?? JsContainer.withDefaultConfig();
+  constructor(runtime?: InstanceType<typeof native.JsContainer>) {
+    this.runtime = runtime ?? native.JsContainer.withDefaultConfig();
     this.compose = this.runtime.compose;
   }
 

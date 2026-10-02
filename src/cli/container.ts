@@ -1,16 +1,20 @@
-import { JsContainer, JsContainerOptions } from "../lib.ts";
+import native from "../build/index.js";
+import type { JsContainerOptions } from "../build/index.js";
 import { ContainerBuildHandler } from "./container-build.ts";
 
 export class ContainerCliHandler {
-  public runtime: JsContainer;
+  public runtime: InstanceType<typeof native.JsContainer>;
   public buildHandler: ContainerBuildHandler;
 
-  constructor(runtime?: JsContainer) {
-    this.runtime = runtime ?? JsContainer.withDefaultConfig();
+  constructor(runtime?: InstanceType<typeof native.JsContainer>) {
+    this.runtime = runtime ?? native.JsContainer.withDefaultConfig();
     this.buildHandler = new ContainerBuildHandler(this.runtime);
   }
 
-  public async runContainer(options: JsContainerOptions, name?: string): Promise<JsContainer> {
+  public async runContainer(
+    options: JsContainerOptions,
+    name?: string,
+  ): Promise<InstanceType<typeof native.JsContainer>> {
     const container = await this.runtime.create(options, name);
     await container.start();
     return container;

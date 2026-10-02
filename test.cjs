@@ -119,6 +119,35 @@ test("JsEfiVarStore initialization and setup mode", () => {
   assert.equal(typeof store.getSetupMode(), "boolean");
 });
 
+test("JsBuildFile, JsBufferedCopyReader, JsBuildFsSync and JsTerminalCommand", () => {
+  const {
+    JsBuildFile,
+    JsBufferedCopyReader,
+    JsBuildFsSync,
+    JsTerminalCommand,
+  } = require("./build/index.js");
+
+  assert.equal(JsBuildFile.resolvePath("./"), null);
+
+  const winch = JsTerminalCommand.createWinch(24, 80);
+  assert.equal(winch.commandType, "terminal");
+  assert.equal(winch.code, "winch");
+  assert.equal(winch.rows, 24);
+  assert.equal(winch.cols, 80);
+
+  const ack = JsTerminalCommand.createAck();
+  assert.equal(ack.code, "ack");
+
+  const fsSync = new JsBuildFsSync("./");
+  assert.equal(fsSync.acceptStage("fssync"), true);
+  assert.equal(fsSync.acceptStage("other"), false);
+
+  const reader = new JsBufferedCopyReader("package.json");
+  assert.equal(reader.hasFinished, false);
+  const chunk = reader.nextChunk();
+  assert.ok(chunk === null || Buffer.isBuffer(chunk));
+});
+
 test("JsBuildTransfer and JsImageTransfer ported helper methods", () => {
   const bt = new JsBuildTransfer({
     stage: "builder",

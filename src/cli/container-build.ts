@@ -1,4 +1,5 @@
-import { JsBuildOptions, JsContainer } from "../lib.ts";
+import native from "../build/index.js";
+import type { JsBuildOptions, JsContainer } from "../build/index.js";
 
 export interface BuildCommandOptions {
   contextDir?: string;
@@ -16,10 +17,10 @@ export interface BuildCommandOptions {
 }
 
 export class ContainerBuildHandler {
-  private runtime: JsContainer;
+  private runtime: InstanceType<typeof native.JsContainer>;
 
-  constructor(runtime?: JsContainer) {
-    this.runtime = runtime ?? JsContainer.withDefaultConfig();
+  constructor(runtime?: InstanceType<typeof native.JsContainer>) {
+    this.runtime = runtime ?? native.JsContainer.withDefaultConfig();
   }
 
   public validateOptions(options: BuildCommandOptions): void {

@@ -4,8 +4,10 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use virtfw_varstore::store::EfiVarStore;
 
+pub mod build;
 pub mod cli;
 use cli::{BuilderCli, ComposeCli, ContainerCli};
+pub use build::*;
 
 #[napi(object)]
 #[derive(Clone, Debug, Default)]

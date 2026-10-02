@@ -16,6 +16,11 @@ export const JsBuildTransfer = native.JsBuildTransfer;
 export const JsImageTransfer = native.JsImageTransfer;
 export const JsServerStream = native.JsServerStream;
 
+export const JsBuildFile = native.JsBuildFile;
+export const JsBufferedCopyReader = native.JsBufferedCopyReader;
+export const JsBuildFsSync = native.JsBuildFsSync;
+export const JsTerminalCommand = native.JsTerminalCommand;
+
 export const JsComposeHandle = native.JsComposeHandle;
 export const JsComposeSystemHandle = native.JsComposeSystemHandle;
 

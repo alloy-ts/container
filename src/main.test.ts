@@ -75,6 +75,23 @@ test("ContainerBuildHandler and CLI handlers work", async () => {
   expect(await composeHandler.version()).toContain("container-compose");
 });
 
+test("JsBuildFile, JsBufferedCopyReader, JsBuildFsSync and JsTerminalCommand work", async () => {
+  const { JsBuildFile, JsBufferedCopyReader, JsBuildFsSync, JsTerminalCommand } =
+    await import("./lib.ts");
+
+  expect(JsBuildFile.resolvePath("./")).toBeNull();
+
+  const winch = JsTerminalCommand.createWinch(24, 80);
+  expect(winch.rows).toBe(24);
+  expect(winch.cols).toBe(80);
+
+  const fsSync = new JsBuildFsSync("./");
+  expect(fsSync.acceptStage("fssync")).toBe(true);
+
+  const reader = new JsBufferedCopyReader("package.json");
+  expect(reader.hasFinished).toBe(false);
+});
+
 test("JsEfiVarStore initializes", () => {
   const store = new JsEfiVarStore();
   expect(store).toBeDefined();
