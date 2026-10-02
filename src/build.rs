@@ -5,10 +5,10 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Component, Path, PathBuf};
 
 #[napi]
-pub struct JsBuildFile;
+pub struct BuildFile;
 
 #[napi]
-impl JsBuildFile {
+impl BuildFile {
   #[napi]
   pub fn resolve_path(context_dir: String) -> Result<Option<String>> {
     let context_path = Path::new(&context_dir);
@@ -26,7 +26,7 @@ impl JsBuildFile {
 }
 
 #[napi]
-pub struct JsBufferedCopyReader {
+pub struct BufferedCopyReader {
   file_path: PathBuf,
   chunk_size: usize,
   file: File,
@@ -34,7 +34,7 @@ pub struct JsBufferedCopyReader {
 }
 
 #[napi]
-impl JsBufferedCopyReader {
+impl BufferedCopyReader {
   #[napi(constructor)]
   pub fn new(file_path: String, chunk_size: Option<u32>) -> Result<Self> {
     let size = chunk_size.unwrap_or(4 * 1024 * 1024) as usize;
@@ -87,15 +87,14 @@ impl JsBufferedCopyReader {
 }
 
 #[napi]
-pub struct JsBuildFsSync {
+pub struct BuildFsSync {
   context_dir: PathBuf,
 }
 
-impl JsBuildFsSync {
+impl BuildFsSync {
   fn safe_resolve_path(&self, relative_or_abs: &str) -> Result<PathBuf> {
     let rel_path = Path::new(relative_or_abs);
 
-    // Strip leading slashes / root components so Path::join doesn't override context_dir
     let clean_rel: PathBuf = rel_path
       .components()
       .filter(|c| matches!(c, Component::Normal(_)))
@@ -103,7 +102,6 @@ impl JsBuildFsSync {
 
     let full_path = self.context_dir.join(clean_rel);
 
-    // Ensure canonical/resolved path is contained inside context_dir if it exists
     let context_canonical = self
       .context_dir
       .canonicalize()
@@ -126,7 +124,7 @@ impl JsBuildFsSync {
 }
 
 #[napi]
-impl JsBuildFsSync {
+impl BuildFsSync {
   #[napi(constructor)]
   pub fn new(context_dir: String) -> Result<Self> {
     let path = PathBuf::from(&context_dir);
@@ -174,7 +172,7 @@ impl JsBuildFsSync {
 
 #[napi(object)]
 #[derive(Clone, Debug)]
-pub struct JsTerminalCommandInfo {
+pub struct TerminalCommandInfo {
   pub command_type: String,
   pub code: String,
   pub rows: u16,
@@ -182,13 +180,13 @@ pub struct JsTerminalCommandInfo {
 }
 
 #[napi]
-pub struct JsTerminalCommand;
+pub struct TerminalCommand;
 
 #[napi]
-impl JsTerminalCommand {
+impl TerminalCommand {
   #[napi]
-  pub fn create_winch(rows: u16, cols: u16) -> JsTerminalCommandInfo {
-    JsTerminalCommandInfo {
+  pub fn create_winch(rows: u16, cols: u16) -> TerminalCommandInfo {
+    TerminalCommandInfo {
       command_type: "terminal".to_string(),
       code: "winch".to_string(),
       rows,
@@ -197,8 +195,8 @@ impl JsTerminalCommand {
   }
 
   #[napi]
-  pub fn create_ack() -> JsTerminalCommandInfo {
-    JsTerminalCommandInfo {
+  pub fn create_ack() -> TerminalCommandInfo {
+    TerminalCommandInfo {
       command_type: "terminal".to_string(),
       code: "ack".to_string(),
       rows: 0,

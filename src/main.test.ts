@@ -1,19 +1,23 @@
 import { expect, test } from "vite-plus/test";
 import {
-  JsBuildTransfer,
-  JsContainer,
-  JsEfiVarStore,
-  JsImageTransfer,
-  JsServerStream,
+  BuildFile,
+  BufferedCopyReader,
+  BuildFsSync,
+  BuildTransfer,
+  Container,
+  EfiVarStore,
+  ImageTransfer,
+  ServerStream,
+  TerminalCommand,
 } from "./lib.ts";
 
-test("JsContainer initializes default config", () => {
-  const runtime = JsContainer.withDefaultConfig();
+test("Container initializes default config", () => {
+  const runtime = Container.withDefaultConfig();
   expect(runtime).toBeDefined();
 });
 
-test("JsContainer create, start, inspect and stop container", async () => {
-  const runtime = JsContainer.withDefaultConfig();
+test("Container create, start, inspect and stop container", async () => {
+  const runtime = Container.withDefaultConfig();
   const container = await runtime.create({ image: "alpine" }, "my-test-container");
   expect(container).toBeDefined();
 
@@ -28,8 +32,8 @@ test("JsContainer create, start, inspect and stop container", async () => {
   expect(stoppedInfo.state.status).toBe("stopped");
 });
 
-test("JsContainer sub-handles accessible", () => {
-  const runtime = JsContainer.withDefaultConfig();
+test("Container sub-handles accessible", () => {
+  const runtime = Container.withDefaultConfig();
   expect(runtime.machines).toBeDefined();
   expect(runtime.k8s).toBeDefined();
   expect(runtime.network).toBeDefined();
@@ -40,8 +44,8 @@ test("JsContainer sub-handles accessible", () => {
   expect(runtime.compose.system).toBeDefined();
 });
 
-test("JsContainer new CLI methods work", async () => {
-  const runtime = JsContainer.withDefaultConfig();
+test("Container new CLI methods work", async () => {
+  const runtime = Container.withDefaultConfig();
 
   const container = await runtime.create({ image: "alpine" }, "c1");
   await container.start();
@@ -75,31 +79,28 @@ test("ContainerBuildHandler and CLI handlers work", async () => {
   expect(await composeHandler.version()).toContain("container-compose");
 });
 
-test("JsBuildFile, JsBufferedCopyReader, JsBuildFsSync and JsTerminalCommand work", async () => {
-  const { JsBuildFile, JsBufferedCopyReader, JsBuildFsSync, JsTerminalCommand } =
-    await import("./lib.ts");
+test("BuildFile, BufferedCopyReader, BuildFsSync and TerminalCommand work", () => {
+  expect(BuildFile.resolvePath("./")).toBeNull();
 
-  expect(JsBuildFile.resolvePath("./")).toBeNull();
-
-  const winch = JsTerminalCommand.createWinch(24, 80);
+  const winch = TerminalCommand.createWinch(24, 80);
   expect(winch.rows).toBe(24);
   expect(winch.cols).toBe(80);
 
-  const fsSync = new JsBuildFsSync("./");
+  const fsSync = new BuildFsSync("./");
   expect(fsSync.acceptStage("fssync")).toBe(true);
 
-  const reader = new JsBufferedCopyReader("package.json");
+  const reader = new BufferedCopyReader("package.json");
   expect(reader.hasFinished).toBe(false);
 });
 
-test("JsEfiVarStore initializes", () => {
-  const store = new JsEfiVarStore();
+test("EfiVarStore initializes", () => {
+  const store = new EfiVarStore();
   expect(store).toBeDefined();
   expect(typeof store.getSetupMode()).toBe("boolean");
 });
 
-test("JsBuildTransfer and JsImageTransfer ported methods work", () => {
-  const bt = new JsBuildTransfer({
+test("BuildTransfer and ImageTransfer ported methods work", () => {
+  const bt = new BuildTransfer({
     stage: "builder",
     method: "dockerfile",
     "include-patterns": "a,b",
@@ -110,11 +111,11 @@ test("JsBuildTransfer and JsImageTransfer ported methods work", () => {
   expect(bt.includePatterns()).toEqual(["a", "b"]);
   expect(bt.size()).toBe(100);
 
-  const it = new JsImageTransfer({
+  const it = new ImageTransfer({
     ref: "alpine:latest",
   });
   expect(it.refName()).toBe("alpine:latest");
 
-  const stream = new JsServerStream(it, bt);
+  const stream = new ServerStream(it, bt);
   expect(stream.getImageTransfer()).toBeDefined();
 });

@@ -2,15 +2,19 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
-  JsContainer,
-  JsEfiVarStore,
-  JsBuildTransfer,
-  JsImageTransfer,
-  JsServerStream,
+  Container,
+  EfiVarStore,
+  BuildTransfer,
+  ImageTransfer,
+  ServerStream,
+  BuildFile,
+  BufferedCopyReader,
+  BuildFsSync,
+  TerminalCommand,
 } = require("./build/index.js");
 
-test("JsContainer withDefaultConfig and create container", async () => {
-  const runtime = JsContainer.withDefaultConfig();
+test("Container withDefaultConfig and create container", async () => {
+  const runtime = Container.withDefaultConfig();
   assert.ok(runtime);
 
   const container = await runtime.create({ image: "alpine:latest" }, "test-box");
@@ -33,8 +37,8 @@ test("JsContainer withDefaultConfig and create container", async () => {
   assert.ok(metrics.containeresCreatedTotal >= 1);
 });
 
-test("JsContainer sub-handles (machines, k8s, network, registry, system, compose)", () => {
-  const runtime = JsContainer.withDefaultConfig();
+test("Container sub-handles (machines, k8s, network, registry, system, compose)", () => {
+  const runtime = Container.withDefaultConfig();
 
   const machine = runtime.machines.create("alpine:latest");
   assert.ok(machine.startsWith("machine_"));
@@ -55,8 +59,8 @@ test("JsContainer sub-handles (machines, k8s, network, registry, system, compose
   assert.ok(composeSysStatus.includes("daemon running"));
 });
 
-test("JsContainer ported CLI methods and sub-handles", async () => {
-  const runtime = JsContainer.withDefaultConfig();
+test("Container ported CLI methods and sub-handles", async () => {
+  const runtime = Container.withDefaultConfig();
 
   // Container prune
   const box = await runtime.create({ image: "alpine:latest" }, "prune-box");
@@ -113,43 +117,36 @@ test("JsContainer ported CLI methods and sub-handles", async () => {
   assert.equal(k8s.writeConfig("k8s-dev"), "~/.kube/config");
 });
 
-test("JsEfiVarStore initialization and setup mode", () => {
-  const store = new JsEfiVarStore();
+test("EfiVarStore initialization and setup mode", () => {
+  const store = new EfiVarStore();
   assert.ok(store);
   assert.equal(typeof store.getSetupMode(), "boolean");
 });
 
-test("JsBuildFile, JsBufferedCopyReader, JsBuildFsSync and JsTerminalCommand", () => {
-  const {
-    JsBuildFile,
-    JsBufferedCopyReader,
-    JsBuildFsSync,
-    JsTerminalCommand,
-  } = require("./build/index.js");
+test("BuildFile, BufferedCopyReader, BuildFsSync and TerminalCommand", () => {
+  assert.equal(BuildFile.resolvePath("./"), null);
 
-  assert.equal(JsBuildFile.resolvePath("./"), null);
-
-  const winch = JsTerminalCommand.createWinch(24, 80);
+  const winch = TerminalCommand.createWinch(24, 80);
   assert.equal(winch.commandType, "terminal");
   assert.equal(winch.code, "winch");
   assert.equal(winch.rows, 24);
   assert.equal(winch.cols, 80);
 
-  const ack = JsTerminalCommand.createAck();
+  const ack = TerminalCommand.createAck();
   assert.equal(ack.code, "ack");
 
-  const fsSync = new JsBuildFsSync("./");
+  const fsSync = new BuildFsSync("./");
   assert.equal(fsSync.acceptStage("fssync"), true);
   assert.equal(fsSync.acceptStage("other"), false);
 
-  const reader = new JsBufferedCopyReader("package.json");
+  const reader = new BufferedCopyReader("package.json");
   assert.equal(reader.hasFinished, false);
   const chunk = reader.nextChunk();
   assert.ok(chunk === null || Buffer.isBuffer(chunk));
 });
 
-test("JsBuildTransfer and JsImageTransfer ported helper methods", () => {
-  const bt = new JsBuildTransfer({
+test("BuildTransfer and ImageTransfer ported helper methods", () => {
+  const bt = new BuildTransfer({
     stage: "builder",
     method: "dockerfile",
     "include-patterns": "src/*,package.json",
@@ -169,7 +166,7 @@ test("JsBuildTransfer and JsImageTransfer ported helper methods", () => {
   assert.equal(bt.offset(), 0);
   assert.equal(bt.len(), 512);
 
-  const it = new JsImageTransfer({
+  const it = new ImageTransfer({
     stage: "final",
     method: "pull",
     ref: "ubuntu:latest",
@@ -183,7 +180,7 @@ test("JsBuildTransfer and JsImageTransfer ported helper methods", () => {
   assert.equal(it.platform(), "linux/arm64");
   assert.equal(it.size(), 2048);
 
-  const stream = new JsServerStream(it, bt, { data: Array.from(Buffer.from("hello")) });
+  const stream = new ServerStream(it, bt, { data: Array.from(Buffer.from("hello")) });
 
   assert.ok(stream.getImageTransfer());
   assert.ok(stream.getBuildTransfer());

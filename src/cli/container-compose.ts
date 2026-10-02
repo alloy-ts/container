@@ -1,11 +1,11 @@
 import native from "../build/index.js";
 
 export class ContainerComposeCliHandler {
-  public runtime: InstanceType<typeof native.JsContainer>;
-  public compose: InstanceType<typeof native.JsComposeHandle>;
+  public runtime: InstanceType<typeof native.Container>;
+  public compose: InstanceType<typeof native.ComposeHandle>;
 
-  constructor(runtime?: InstanceType<typeof native.JsContainer>) {
-    this.runtime = runtime ?? native.JsContainer.withDefaultConfig();
+  constructor(runtime?: InstanceType<typeof native.Container>) {
+    this.runtime = runtime ?? native.Container.withDefaultConfig();
     this.compose = this.runtime.compose;
   }
 

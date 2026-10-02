@@ -1,5 +1,5 @@
 import native from "../build/index.js";
-import type { JsBuildOptions, JsContainer } from "../build/index.js";
+import type { BuildOptions } from "../build/index.js";
 
 export interface BuildCommandOptions {
   contextDir?: string;
@@ -17,10 +17,10 @@ export interface BuildCommandOptions {
 }
 
 export class ContainerBuildHandler {
-  private runtime: InstanceType<typeof native.JsContainer>;
+  private runtime: InstanceType<typeof native.Container>;
 
-  constructor(runtime?: InstanceType<typeof native.JsContainer>) {
-    this.runtime = runtime ?? native.JsContainer.withDefaultConfig();
+  constructor(runtime?: InstanceType<typeof native.Container>) {
+    this.runtime = runtime ?? native.Container.withDefaultConfig();
   }
 
   public validateOptions(options: BuildCommandOptions): void {
@@ -33,7 +33,7 @@ export class ContainerBuildHandler {
     this.validateOptions(options);
 
     const contextDir = options.contextDir ?? ".";
-    const buildOptions: JsBuildOptions = {
+    const buildOptions: BuildOptions = {
       dockerfile: options.file,
       target: options.target,
       buildArgs: options.buildArg,
