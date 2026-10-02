@@ -5,6 +5,13 @@ import {
   handleContainerBuild,
   containerCli,
   containerComposeCli,
+  containerRegistryCli,
+  containerNetworkCli,
+  containerMachineCli,
+  containerVolumeCli,
+  containerSystemCli,
+  containerBuilderCli,
+  containerImageCli,
 } from "./lib.ts";
 
 describe("CLI subhandlers tests", () => {
@@ -38,5 +45,48 @@ describe("CLI subhandlers tests", () => {
     const ver = await containerComposeCli.version();
     assert.ok(ver.includes("container-compose"));
     await containerComposeCli.down();
+  });
+
+  it("container registry CLI handler", async () => {
+    await containerRegistryCli.login("docker.io", "user", "pass");
+    const list = await containerRegistryCli.list();
+    assert.ok(Array.isArray(list));
+    await containerRegistryCli.logout("docker.io");
+  });
+
+  it("container network CLI handler", async () => {
+    const net = await containerNetworkCli.create("net1");
+    assert.equal(net, "net1");
+    const list = await containerNetworkCli.list();
+    assert.ok(Array.isArray(list));
+    await containerNetworkCli.delete("net1");
+  });
+
+  it("container machine CLI handler", async () => {
+    const m = await containerMachineCli.create("alpine:latest", "m1");
+    assert.equal(m, "machine_m1");
+    await containerMachineCli.stop("m1");
+    await containerMachineCli.delete("m1");
+  });
+
+  it("container volume CLI handler", async () => {
+    const v = await containerVolumeCli.create("v1");
+    assert.equal(v, "v1");
+    await containerVolumeCli.delete("v1");
+  });
+
+  it("container system CLI handler", async () => {
+    const status = await containerSystemCli.status();
+    assert.equal(status, "running");
+  });
+
+  it("container builder CLI handler", async () => {
+    const res = await containerBuilderCli.start();
+    assert.equal(res, "buildkit");
+  });
+
+  it("container image CLI handler", async () => {
+    const list = await containerImageCli.list();
+    assert.ok(Array.isArray(list));
   });
 });

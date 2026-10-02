@@ -488,8 +488,8 @@ pub struct MachineHandle {}
 #[napi]
 impl MachineHandle {
   #[napi]
-  pub fn create(&self, image: String, _name: Option<String>) -> Result<String> {
-    Ok(format!("machine_{image}"))
+  pub fn create(&self, image: String, name: Option<String>) -> Result<String> {
+    Ok(format!("machine_{}", name.as_deref().unwrap_or(&image)))
   }
 
   #[napi]
