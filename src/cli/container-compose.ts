@@ -1,4 +1,4 @@
-import native from "../build/index.js";
+import native from "../../build/index.js";
 
 export class ContainerComposeCliHandler {
   public runtime: InstanceType<typeof native.Container>;

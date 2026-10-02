@@ -138,7 +138,11 @@ export type ClientStream = {
   data: Uint8Array;
 };
 
-export { ContainerBuildHandler, buildCommand } from "./cli/container-build.ts";
+export {
+  ContainerBuildHandler,
+  Container as ContainerBuildNamespace,
+  buildCommand,
+} from "./cli/container-build.ts";
 export { ContainerCliHandler } from "./cli/container.ts";
 export { ContainerComposeCliHandler } from "./cli/container-compose.ts";
 

@@ -1,5 +1,5 @@
-import native from "../build/index.js";
-import type { ContainerOptions } from "../build/index.js";
+import native from "../../build/index.js";
+import type { ContainerOptions } from "../../build/index.js";
 import { ContainerBuildHandler } from "./container-build.ts";
 
 export class ContainerCliHandler {

@@ -6,8 +6,8 @@ use virtfw_varstore::store::EfiVarStore as InnerEfiVarStore;
 
 pub mod build;
 pub mod cli;
-use cli::{BuilderCli, ComposeCli, ContainerCli};
 pub use build::*;
+pub use cli::*;
 
 #[napi(object)]
 #[derive(Clone, Debug, Default)]

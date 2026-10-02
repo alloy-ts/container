@@ -1,5 +1,5 @@
-import native from "../build/index.js";
-import type { BuildOptions } from "../build/index.js";
+import native from "../../build/index.js";
+import type { ContainerBuildOptions } from "../../build/index.js";
 
 export interface BuildCommandOptions {
   contextDir?: string;
@@ -16,6 +16,25 @@ export interface BuildCommandOptions {
   memory?: string;
 }
 
+export const build = async (options: BuildCommandOptions = {}): Promise<string> => {
+  const napiOptions: ContainerBuildOptions = {
+    contextDir: options.contextDir ?? ".",
+    file: options.file,
+    target: options.target,
+    buildArgs: options.buildArg,
+    tags: options.tag ?? ["latest"],
+    arch: options.arch,
+    os: options.os,
+    platform: options.platform,
+    noCache: options.noCache,
+    quiet: options.quiet,
+    cpus: options.cpus,
+    memory: options.memory,
+  };
+
+  return native.containerBuild(napiOptions);
+};
+
 export class ContainerBuildHandler {
   private runtime: InstanceType<typeof native.Container>;
 
@@ -24,29 +43,22 @@ export class ContainerBuildHandler {
   }
 
   public validateOptions(options: BuildCommandOptions): void {
-    if (options.file && options.file !== "-" && options.file.length === 0) {
+    if (options.file !== undefined && options.file !== "-" && options.file.length === 0) {
       throw new Error("Dockerfile path cannot be empty");
     }
   }
 
   public async run(options: BuildCommandOptions = {}): Promise<string> {
     this.validateOptions(options);
-
-    const contextDir = options.contextDir ?? ".";
-    const buildOptions: BuildOptions = {
-      dockerfile: options.file,
-      target: options.target,
-      buildArgs: options.buildArg,
-      tags: options.tag ?? ["latest"],
-    };
-
-    return this.runtime.images.build(contextDir, buildOptions);
+    return build(options);
   }
 }
 
-export const buildCommand = async (options: BuildCommandOptions = {}): Promise<string> => {
-  const handler = new ContainerBuildHandler();
-  return handler.run(options);
+export const Container = {
+  build,
+  BuildHandler: ContainerBuildHandler,
 };
 
-export default ContainerBuildHandler;
+export const buildCommand = build;
+
+export default Container;
