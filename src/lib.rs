@@ -6,8 +6,10 @@ use virtfw_varstore::store::EfiVarStore as InnerEfiVarStore;
 
 pub mod build;
 pub mod cli;
+pub mod config;
 pub use build::*;
 pub use cli::*;
+pub use config::ContainerSystemConfig;
 
 #[napi(object)]
 #[derive(Clone, Debug, Default)]
@@ -661,64 +663,57 @@ pub struct SystemHandle {}
 impl SystemHandle {
   #[napi]
   pub fn start(&self) -> Result<()> {
-    Ok(())
+    system_start()
   }
 
   #[napi]
   pub fn stop(&self) -> Result<()> {
-    Ok(())
+    system_stop()
   }
 
   #[napi]
   pub fn status(&self) -> Result<String> {
-    Ok("running".to_string())
+    system_status()
   }
 
   #[napi]
   pub fn version(&self) -> Result<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    map.insert("version".to_string(), "1.0.0".to_string());
-    map.insert("component".to_string(), "@lib/container".to_string());
-    Ok(map)
+    system_version()
   }
 
   #[napi]
   pub fn df(&self) -> Result<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    map.insert("reclaimable".to_string(), "0B".to_string());
-    Ok(map)
+    system_df()
   }
 
   #[napi]
-  pub fn logs(&self, _follow: Option<bool>, _last: Option<String>) -> Result<Vec<String>> {
-    Ok(vec![])
+  pub fn logs(&self, follow: Option<bool>, last: Option<String>) -> Result<Vec<String>> {
+    system_logs(follow, last)
   }
 
   #[napi]
   pub fn list_properties(&self) -> Result<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    map.insert("log.level".to_string(), "info".to_string());
-    Ok(map)
+    system_property_list()
   }
 
   #[napi]
-  pub fn dns_create(&self, domain: String, _ip: Option<String>) -> Result<String> {
-    Ok(domain)
+  pub fn dns_create(&self, domain: String, ip: Option<String>) -> Result<String> {
+    system_dns_create(domain, ip)
   }
 
   #[napi]
   pub fn dns_list(&self) -> Result<Vec<HashMap<String, String>>> {
-    Ok(vec![])
+    system_dns_list()
   }
 
   #[napi]
-  pub fn dns_delete(&self, _domain: String) -> Result<()> {
-    Ok(())
+  pub fn dns_delete(&self, domain: String) -> Result<()> {
+    system_dns_delete(domain)
   }
 
   #[napi]
   pub fn kernel_set(&self, path: String) -> Result<String> {
-    Ok(path)
+    system_kernel_set(path)
   }
 }
 

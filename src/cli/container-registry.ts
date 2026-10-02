@@ -5,7 +5,7 @@ export const login = async (options: RegistryLoginOptions): Promise<string> => {
   return native.registryLogin(options);
 };
 
-export const logout = async (server: String): Promise<void> => {
+export const logout = async (server: string): Promise<void> => {
   return native.registryLogout(server);
 };
 
@@ -31,6 +31,11 @@ export const Registry = {
   login,
   logout,
   list,
+  RegistryHandler: ContainerRegistryHandler,
+};
+
+export const Container = {
+  registry: Registry,
   RegistryHandler: ContainerRegistryHandler,
 };
 
