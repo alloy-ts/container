@@ -1,3 +1,4 @@
+pub mod config;
 pub mod cli;
 
 use std::collections::HashMap;
@@ -620,18 +621,33 @@ pub struct RegistryHandle {}
 #[napi]
 impl RegistryHandle {
   #[napi]
-  pub fn login(&self, _server: String, _username: Option<String>, _password: Option<String>) -> Result<()> {
+  pub fn login(&self, server: String, username: Option<String>, password: Option<String>) -> Result<()> {
+    crate::cli::container_registry::ContainerRegistryCliHandler::login(
+      crate::cli::container_registry::RegistryLoginOptions {
+        server,
+        username,
+        password,
+        ..Default::default()
+      },
+    )
+    .map_err(Error::from_reason)?;
     Ok(())
   }
 
   #[napi]
-  pub fn logout(&self, _server: String) -> Result<()> {
+  pub fn logout(&self, server: String) -> Result<()> {
+    crate::cli::container_registry::ContainerRegistryCliHandler::logout(&server)
+      .map_err(Error::from_reason)?;
     Ok(())
   }
 
   #[napi]
   pub fn list(&self) -> Vec<String> {
-    vec![]
+    crate::cli::container_registry::ContainerRegistryCliHandler::list(Default::default())
+      .unwrap_or_default()
+      .into_iter()
+      .map(|r| r.name)
+      .collect()
   }
 }
 
@@ -681,54 +697,56 @@ impl SystemHandle {
 
   #[napi]
   pub fn status(&self) -> Result<String> {
-    Ok("running".to_string())
+    Ok(crate::cli::container_system::ContainerSystemCliHandler::new().status())
   }
 
   #[napi]
   pub fn version(&self) -> Result<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    map.insert("version".to_string(), "1.0.0".to_string());
-    map.insert("component".to_string(), "@lib/container".to_string());
-    Ok(map)
+    Ok(crate::cli::container_system::ContainerSystemCliHandler::new().version())
   }
 
   #[napi]
   pub fn df(&self) -> Result<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    map.insert("reclaimable".to_string(), "0B".to_string());
-    Ok(map)
+    Ok(crate::cli::container_system::ContainerSystemCliHandler::new().df())
   }
 
   #[napi]
-  pub fn logs(&self, _follow: Option<bool>, _last: Option<String>) -> Result<Vec<String>> {
-    Ok(vec![])
+  pub fn logs(&self, follow: Option<bool>, last: Option<String>) -> Result<Vec<String>> {
+    Ok(crate::cli::container_system::ContainerSystemCliHandler::new().logs(follow, last))
   }
 
   #[napi]
   pub fn list_properties(&self) -> Result<HashMap<String, String>> {
-    let mut map = HashMap::new();
-    map.insert("log.level".to_string(), "info".to_string());
-    Ok(map)
+    Ok(crate::cli::container_system::ContainerSystemCliHandler::new().list_properties())
   }
 
   #[napi]
-  pub fn dns_create(&self, domain: String, _ip: Option<String>) -> Result<String> {
-    Ok(domain)
+  pub fn property_list(&self, format: Option<String>) -> Result<String> {
+    Ok(crate::cli::container_system::ContainerSystemCliHandler::new().property_list(format))
+  }
+
+  #[napi]
+  pub fn dns_create(&self, domain: String, ip: Option<String>) -> Result<String> {
+    Ok(crate::cli::container_system::ContainerSystemCliHandler::new().dns_create(domain, ip))
   }
 
   #[napi]
   pub fn dns_list(&self) -> Result<Vec<HashMap<String, String>>> {
-    Ok(vec![])
+    Ok(crate::cli::container_system::ContainerSystemCliHandler::new().dns_list())
   }
 
   #[napi]
-  pub fn dns_delete(&self, _domain: String) -> Result<()> {
-    Ok(())
+  pub fn dns_delete(&self, domain: String) -> Result<()> {
+    crate::cli::container_system::ContainerSystemCliHandler::new()
+      .dns_delete(domain)
+      .map_err(Error::from_reason)
   }
 
   #[napi]
   pub fn kernel_set(&self, path: String) -> Result<String> {
-    Ok(path)
+    crate::cli::container_system::ContainerSystemCliHandler::new()
+      .kernel_set(path)
+      .map_err(Error::from_reason)
   }
 }
 
