@@ -12,8 +12,11 @@ fusevm = "0.26.8"
 kvm-bindings = "0.14.0"
 kvm-ioctls = "0.24.0"
 linux-loader = "0.13.0"
+dirs = "5.0"
 napi = { version = "3", features = ["tokio_rt"] }
 napi-derive = "3"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
 runtime-rs = { git = "https://github.com/kata-containers/kata-containers.git", version = "0.1.0" }
 seccompiler = "0.5.0"
 vfio-bindings = "0.6.2"

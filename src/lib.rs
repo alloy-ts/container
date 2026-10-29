@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod config;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -1503,8 +1504,8 @@ impl Container {
   }
 
   #[napi(getter)]
-  pub fn images(&self) -> Result<ImageHandle> {
-    Ok(ImageHandle {})
+  pub fn images(&self) -> Result<cli::container_image::ContainerImage> {
+    Ok(cli::container_image::ContainerImage::new())
   }
 
   #[napi(getter)]
@@ -1523,18 +1524,18 @@ impl Container {
   }
 
   #[napi(getter)]
-  pub fn network(&self) -> Result<NetworkHandle> {
-    Ok(NetworkHandle {})
+  pub fn network(&self) -> Result<cli::container_network::ContainerNetwork> {
+    Ok(cli::container_network::ContainerNetwork::new())
   }
 
   #[napi(getter)]
-  pub fn registry(&self) -> Result<RegistryHandle> {
-    Ok(RegistryHandle {})
+  pub fn registry(&self) -> Result<cli::container_registry::ContainerRegistry> {
+    Ok(cli::container_registry::ContainerRegistry::new())
   }
 
   #[napi(getter)]
-  pub fn system(&self) -> Result<SystemHandle> {
-    Ok(SystemHandle {})
+  pub fn system(&self) -> Result<cli::container_system::ContainerSystem> {
+    Ok(cli::container_system::ContainerSystem::new())
   }
 
   #[napi(getter)]
