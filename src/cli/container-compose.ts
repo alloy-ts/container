@@ -29,3 +29,35 @@ export class ContainerComposeCliHandler {
 }
 
 export const containerComposeCli = new ContainerComposeCliHandler();
+
+export namespace ContainerComposeNamespace {
+  export async function up(detach?: boolean, build?: boolean) {
+    return containerComposeCli.up(detach, build);
+  }
+
+  export async function down(volumes?: boolean) {
+    return containerComposeCli.down(volumes);
+  }
+
+  export async function ps() {
+    return containerComposeCli.ps();
+  }
+
+  export async function logs(follow?: boolean) {
+    return containerComposeCli.logs(follow);
+  }
+
+  export async function version() {
+    return containerComposeCli.version();
+  }
+}
+
+export namespace Container {
+  export const compose = ContainerComposeNamespace;
+}
+
+declare global {
+  namespace Container {
+    export const compose: typeof ContainerComposeNamespace;
+  }
+}

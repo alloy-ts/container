@@ -26,3 +26,35 @@ export class ContainerCliHandler {
 }
 
 export const containerCli = new ContainerCliHandler();
+
+export namespace Container {
+  export async function create(options: ContainerOptions, name?: string) {
+    return containerCli.create(options, name);
+  }
+
+  export async function list() {
+    return containerCli.list();
+  }
+
+  export async function get(idOrName: string) {
+    return containerCli.get(idOrName);
+  }
+
+  export async function remove(idOrName: string, force?: boolean) {
+    return containerCli.remove(idOrName, force);
+  }
+
+  export async function prune() {
+    return containerCli.prune();
+  }
+}
+
+declare global {
+  namespace Container {
+    export function create(options: ContainerOptions, name?: string): Promise<any>;
+    export function list(): Promise<any>;
+    export function get(idOrName: string): Promise<any>;
+    export function remove(idOrName: string, force?: boolean): Promise<any>;
+    export function prune(): Promise<any>;
+  }
+}

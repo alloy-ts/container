@@ -12,6 +12,8 @@ const {
   JsImageTransfer,
   ServerStream,
   JsServerStream,
+  RegistryCliHandler,
+  SystemCliHandler,
 } = require("./build/index.js");
 
 test("Container / JsContainer withDefaultConfig and create container", async () => {
@@ -58,6 +60,30 @@ test("Container sub-handles (machines, k8s, network, registry, system, compose)"
 
   const composeSysStatus = runtime.compose.system.status();
   assert.ok(composeSysStatus.includes("daemon running"));
+});
+
+test("RegistryCliHandler login, list, and logout", () => {
+  const handler = new RegistryCliHandler();
+  handler.login("docker.io", "testuser", "secretpass");
+
+  const list = handler.list();
+  assert.equal(list.length, 1);
+  assert.equal(list[0].name, "docker.io");
+  assert.equal(list[0].username, "testuser");
+
+  handler.logout("docker.io");
+  assert.equal(handler.list().length, 0);
+});
+
+test("SystemCliHandler default configuration snapshot", () => {
+  const handler = new SystemCliHandler();
+  const jsonStr = handler.getConfigJson();
+  assert.ok(jsonStr.length > 0);
+
+  const config = JSON.parse(jsonStr);
+  assert.equal(config.registry.domain, "docker.io");
+  assert.equal(config.build.cpus, 2);
+  assert.equal(config.container.cpus, 4);
 });
 
 test("Container ported CLI methods and sub-handles", async () => {
