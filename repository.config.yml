@@ -1,7 +1,7 @@
-name: engine
+name: container
 owner: alloy-ts
 description:
 repository:
-  - https://codeberg.org/alloy-ts/engine
-  - https://gitlab.com/alloy-ts/engine
-  - https://github.com/alloy-ts/engine
+  - https://codeberg.org/alloy-ts/container
+  - https://gitlab.com/alloy-ts/container
+  - https://github.com/alloy-ts/container
