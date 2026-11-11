@@ -18,23 +18,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
-name = "container-native"
-version = "0.1.0"
-dependencies = [
- "napi",
- "napi-build",
- "napi-derive",
- "oxc",
- "oxc_allocator",
- "oxc_ast",
- "oxc_estree",
- "oxc_parser",
- "oxc_span",
- "rocket",
- "serde_json",
-]
-
-[[package]]
 name = "async-stream"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -158,6 +141,23 @@ dependencies = [
  "serde",
  "static_assertions",
  "zmij",
+]
+
+[[package]]
+name = "container-native"
+version = "0.1.0"
+dependencies = [
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "oxc",
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_estree",
+ "oxc_parser",
+ "oxc_span",
+ "rocket",
+ "serde_json",
 ]
 
 [[package]]

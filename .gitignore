@@ -18,3 +18,7 @@ node_modules
 # log files
 logs
 *.log
+
+# napi-rs build reconciliation artifacts / temp stage dirs
+.napi-rs-filesystem-reconciliation*
+.dist.napi-stage-*

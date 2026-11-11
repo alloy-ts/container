@@ -18,7 +18,7 @@
     "build:release": "node build.ts --release",
     "dev": "vp pack --watch",
     "start": "vp run src/main.ts",
-    "test": "vp test && node --test test.cjs",
+    "test": "vp test",
     "check": "vp check",
     "fmt": "vp fmt",
     "lint": "vp lint",
@@ -37,7 +37,7 @@
     "typescript": "^7.0.2"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0-rc.1"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0"
   },
   "napi": {
     "binaryName": "container",
@@ -62,7 +62,7 @@
     "packageManager": {
       "name": "npm",
       "version": "11.11.0",
-      "onFail": "download"
+      "onFail": "warn"
     }
   }
 }
