@@ -1,12 +1,13 @@
-//! KVM VM, guest RAM, and the vCPU run loop.
+//! KVM VM, guest RAM, and vCPU construction.
 //!
-//! `run_vcpu` is the steady-state loop `boot` will enter once virtio devices
-//! exist. It is not started today: a guest with no virtio-vsock can never
-//! connect back, and `KVM_RUN` on a real kernel would block the caller.
+//! This module owns the machine — the `/dev/kvm` handle, the VM fd, guest RAM,
+//! and the configured vCPUs — and hands the pieces out to the runtime in
+//! [`super::vmm`]: `vm()` for interrupt/irqfd setup, `memory()` for the device
+//! model, and `take_vcpus()` for the run-loop threads.
 
 use kvm_bindings::{kvm_segment, kvm_userspace_memory_region, KVM_MAX_CPUID_ENTRIES};
-use kvm_ioctls::{Kvm, VcpuExit, VcpuFd, VmFd};
-use vm_memory::{GuestAddress, GuestMemoryBackend, GuestMemoryMmap};
+use kvm_ioctls::{Kvm, VcpuFd, VmFd};
+use vm_memory::{GuestAddress, GuestMemory, GuestMemoryMmap};
 
 use super::boot::{self, LoadedKernel};
 use crate::error::{Error, Result};
@@ -78,9 +79,19 @@ impl KvmMachine {
     /// Guest RAM, as the `vm-memory` view shared with the vCPU and device
     /// threads. The mapping is reference counted, so cloning this handle is
     /// what a worker thread uses to reach guest memory.
-    #[allow(dead_code)]
     pub(crate) fn memory(&self) -> &GuestMemoryMmap {
         &self.memory
+    }
+
+    /// The VM fd, for interrupt-controller setup, irqfd, and ioeventfd.
+    pub(crate) fn vm(&self) -> &VmFd {
+        &self._vm
+    }
+
+    /// Hand the vCPU fds to the run-loop threads. Called once, after the boot
+    /// state is configured, so the machine keeps only the VM fd and the RAM.
+    pub(crate) fn take_vcpus(&mut self) -> Vec<VcpuFd> {
+        std::mem::take(&mut self.vcpus)
     }
 
     pub(crate) fn load_kernel(&mut self, kernel: &[u8], cmdline: &str) -> Result<LoadedKernel> {
@@ -180,43 +191,6 @@ impl Serial {
             // Transmitter holding register empty | transmitter empty.
             0x3FD => data.fill(0x60),
             _ => {}
-        }
-    }
-}
-
-/// Run one vCPU until it halts, shuts down, or `stop` is set.
-///
-/// TODO(linux): MMIO exits are where virtio-mmio devices will be dispatched.
-/// They are acknowledged and ignored so an unexpected access cannot wedge the
-/// thread, which also means the guest cannot yet drive a device.
-#[allow(dead_code)]
-pub(crate) fn run_vcpu(
-    vcpu: &mut VcpuFd,
-    serial: &mut Serial,
-    stop: &std::sync::atomic::AtomicBool,
-) {
-    use std::sync::atomic::Ordering;
-    loop {
-        if stop.load(Ordering::Relaxed) {
-            break;
-        }
-        match vcpu.run() {
-            Ok(VcpuExit::Hlt | VcpuExit::Shutdown | VcpuExit::SystemEvent(_, _)) => break,
-            Ok(VcpuExit::IoOut(port, data)) => serial.io_out(port, data),
-            Ok(VcpuExit::IoIn(port, data)) => serial.io_in(port, data),
-            Ok(VcpuExit::MmioRead(_addr, data)) => data.fill(0),
-            Ok(VcpuExit::MmioWrite(_addr, _data)) => {}
-            Ok(VcpuExit::X86Rdmsr(msr)) => {
-                *msr.data = 0;
-                *msr.error = 0;
-            }
-            Ok(VcpuExit::X86Wrmsr(msr)) => {
-                *msr.error = 0;
-            }
-            Ok(VcpuExit::Intr) => continue,
-            Ok(_) => break,
-            Err(err) if err.errno() == libc::EINTR || err.errno() == libc::EAGAIN => continue,
-            Err(_) => break,
         }
     }
 }

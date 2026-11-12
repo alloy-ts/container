@@ -1,18 +1,20 @@
-//! Linux microVM host: KVM + TAP + AF_VSOCK.
+//! Linux microVM host: KVM + virtio-mmio + TAP.
 //!
-//! What is implemented on x86_64:
+//! What `boot` does on x86_64:
 //!   * open `/dev/kvm`, create a VM, map guest RAM, create vCPUs, install CPUID
 //!   * parse a bzImage, load it, build an identity map and 64-bit boot state
-//!   * open a TAP device and assign its IPv4 address
-//!   * bind an AF_VSOCK port on the host
+//!   * create the in-kernel LAPIC/IOAPIC/PIT and route a GSI per device
+//!   * place a virtio-vsock device on an MMIO window and append the
+//!     `virtio_mmio.device=` property to the kernel command line
+//!   * spawn a vCPU thread that dispatches MMIO/port-I/O to the device bus
+//!   * wait for the guest init to connect into the vsock proxy and hand that
+//!     stream to the agent client
 //!
-//! What is not (each call site says TODO):
-//!   * virtio-net, virtio-fs / virtio-blk, and virtio-vsock device emulation
-//!   * driving `KVM_RUN` as the steady state of `Container::create`
-//!
-//! `boot` therefore builds the machine and then rolls it back with an explicit
-//! error instead of returning a container whose guest can never reach the
-//! agent. arm64 Linux is a stub: the kernel loader is x86_64 only.
+//! virtio-fs, virtio-net, and virtio-vsock devices are served over virtio-mmio.
+//! What is not implemented yet is a guest image (a static init that mounts its
+//! rootfs over virtio-fs and connects to the vsock proxy), so `boot` runs the
+//! machine and reports the handshake failure rather than pretending to succeed.
+//! arm64 Linux is a stub: the kernel loader is x86_64 only.
 
 mod tap;
 pub(crate) mod vsock;
@@ -27,6 +29,8 @@ mod irq;
 mod kvm;
 #[cfg(target_arch = "x86_64")]
 pub(crate) mod virtio;
+#[cfg(target_arch = "x86_64")]
+mod vmm;
 
 use async_trait::async_trait;
 
@@ -34,13 +38,38 @@ use super::{BootedVm, Hypervisor, VmConfig};
 use crate::error::{Error, Result};
 
 #[cfg(target_arch = "x86_64")]
+use std::sync::{Arc, Mutex};
+#[cfg(target_arch = "x86_64")]
+use std::time::Duration;
+
+#[cfg(target_arch = "x86_64")]
+use super::AgentLink;
+#[cfg(target_arch = "x86_64")]
+use bus::{DeviceBus, MmioDevice};
+#[cfg(target_arch = "x86_64")]
 use kvm::KvmMachine;
 #[cfg(target_arch = "x86_64")]
 use tap::TapDevice;
+#[cfg(target_arch = "x86_64")]
+use virtio::fs::{FsConfig, VirtioFs};
+#[cfg(target_arch = "x86_64")]
+use virtio::mmio::VirtioMmioTransport;
+#[cfg(target_arch = "x86_64")]
+use virtio::net::{NetConfig, VirtioNet};
+#[cfg(target_arch = "x86_64")]
+use virtio::vsock::{VirtioVsock, VsockConfig};
+#[cfg(target_arch = "x86_64")]
+use virtio::{MmioLayout, MMIO_SIZE};
+
+#[cfg(target_arch = "x86_64")]
+const SERIAL_PORT: u16 = 0x3f8;
+/// How long `boot` waits for the guest init to reach the vsock proxy.
+#[cfg(target_arch = "x86_64")]
+const BOOT_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub(crate) struct LinuxHypervisor {
     #[cfg(target_arch = "x86_64")]
-    machine: Option<KvmMachine>,
+    vmm: Option<vmm::Vmm>,
     #[cfg(target_arch = "x86_64")]
     tap: Option<TapDevice>,
     paused: bool,
@@ -50,7 +79,7 @@ impl LinuxHypervisor {
     pub(crate) fn new() -> Self {
         Self {
             #[cfg(target_arch = "x86_64")]
-            machine: None,
+            vmm: None,
             #[cfg(target_arch = "x86_64")]
             tap: None,
             paused: false,
@@ -69,25 +98,166 @@ impl LinuxHypervisor {
         boot::validate_header(&kernel)?;
 
         let mut machine = KvmMachine::create(cfg.vcpus, cfg.memory_mb)?;
-        let loaded = machine.load_kernel(&kernel, &cfg.cmdline)?;
-        if let Some(network) = &cfg.network {
-            self.tap = Some(TapDevice::open(network)?);
-        }
-        // Shares are retained on the config the device model will consume.
-        let _shares = &cfg.shares;
-        let _loaded = loaded;
-        self.machine = Some(machine);
 
-        // TODO(linux): attach virtio-blk/virtio-fs for `cfg.shares`, virtio-net
-        // for the TAP, and a virtio-vsock (or vhost-vsock) device bound to
-        // `cfg.vsock_cid`, then run the vCPU thread (`kvm::run_vcpu`) until
-        // the guest init connects. Until that device model exists the guest
-        // cannot speak the agent protocol, so we do not report success.
-        Err(Error::Hypervisor(format!(
-            "TODO: virtio-vsock/virtio-fs/virtio-net device model is not implemented; \
-             KVM machine for '{}' was created (cid {}, port {}) and rolled back",
-            cfg.id, cfg.vsock_cid, cfg.vsock_port
-        )))
+        // Place the virtio-mmio devices and extend the kernel command line so
+        // the guest probes each one without ACPI or PCI enumeration. virtio-net
+        // gets a window only when the config asks for a NIC; every rootfs or
+        // bind-mount share gets its own virtio-fs window.
+        let mut layout = MmioLayout::new();
+        let vsock_slot = layout.place();
+        let net_slot = cfg.network.as_ref().map(|_| layout.place());
+        let fs_slots: Vec<(u64, u32)> = cfg.shares.iter().map(|_| layout.place()).collect();
+        let mut placements = vec![vsock_slot];
+        placements.extend(net_slot);
+        placements.extend(fs_slots.iter().copied());
+        let cmdline = virtio::append_device_args(&cfg.cmdline, &placements);
+        machine.load_kernel(&kernel, &cmdline)?;
+
+        // In-kernel LAPIC/IOAPIC/PIT, plus a routable line per device irqfd.
+        let lines: Vec<u32> = placements.iter().map(|(_, irq)| *irq).collect();
+        irq::install(machine.vm(), &lines)?;
+        let vsock_gsi = irq::Gsi::register(machine.vm(), vsock_slot.1)?;
+
+        // Device bus: the 16550 serial (boot logs) and the virtio devices.
+        let mut bus = DeviceBus::new();
+        bus.register_pio(SERIAL_PORT, 8, vmm::serial_device())?;
+        let mut devices: Vec<MmioDevice> = Vec::new();
+
+        // The vsock device dials this Unix socket when the guest connects; the
+        // accepted host end is what the agent client speaks over.
+        let proxy_path = proxy_socket_path(&cfg.id);
+        let _ = std::fs::remove_file(&proxy_path);
+        let listener = std::os::unix::net::UnixListener::bind(&proxy_path).map_err(|err| {
+            Error::Hypervisor(format!("bind vsock proxy {}: {err}", proxy_path.display()))
+        })?;
+
+        let vsock = VirtioVsock::new(VsockConfig {
+            guest_cid: u64::from(cfg.vsock_cid),
+            port: cfg.vsock_port,
+            proxy_path: proxy_path.clone(),
+        });
+        let transport = VirtioMmioTransport::new(
+            Box::new(vsock),
+            machine.memory().clone(),
+            virtio::Interrupt::new(vsock_gsi),
+        )?;
+        let device: MmioDevice = Arc::new(Mutex::new(transport));
+        bus.register_mmio(vsock_slot.0, MMIO_SIZE, device.clone())?;
+        devices.push(device);
+
+        // virtio-net bridges the NIC virtqueues to the host tap. The tap is
+        // opened here and cloned for the device worker; the original is kept so
+        // the interface outlives the device.
+        if let (Some(network), Some(slot)) = (&cfg.network, net_slot) {
+            let tap = TapDevice::open(network)?;
+            let tap_for_device = tap
+                .try_clone()
+                .map_err(|err| Error::Hypervisor(format!("clone tap for virtio-net: {err}")))?;
+            let net_gsi = irq::Gsi::register(machine.vm(), slot.1)?;
+            let net = VirtioNet::new(
+                NetConfig {
+                    mac: network.mac,
+                    link_up: true,
+                },
+                Box::new(tap_for_device),
+            );
+            let transport = VirtioMmioTransport::new(
+                Box::new(net),
+                machine.memory().clone(),
+                virtio::Interrupt::new(net_gsi),
+            )?;
+            let device: MmioDevice = Arc::new(Mutex::new(transport));
+            bus.register_mmio(slot.0, MMIO_SIZE, device.clone())?;
+            devices.push(device);
+            self.tap = Some(tap);
+        }
+
+        // Each share becomes a virtio-fs device the guest mounts by its tag.
+        for (share, slot) in cfg.shares.iter().zip(fs_slots.iter()) {
+            let fs_gsi = irq::Gsi::register(machine.vm(), slot.1)?;
+            let fs = VirtioFs::new(FsConfig {
+                tag: share.tag.clone(),
+                root_dir: share.path.clone(),
+            })?;
+            let transport = VirtioMmioTransport::new(
+                Box::new(fs),
+                machine.memory().clone(),
+                virtio::Interrupt::new(fs_gsi),
+            )?;
+            let device: MmioDevice = Arc::new(Mutex::new(transport));
+            bus.register_mmio(slot.0, MMIO_SIZE, device.clone())?;
+            devices.push(device);
+        }
+
+        let running = vmm::Vmm::start(machine, Arc::new(Mutex::new(bus)), devices)?;
+        self.vmm = Some(running);
+
+        // Wait for the guest init to reach the proxy, then hand the stream to
+        // the agent client.
+        let incoming =
+            tokio::task::spawn_blocking(move || accept_agent(&listener, BOOT_CONNECT_TIMEOUT))
+                .await
+                .map_err(|err| Error::Hypervisor(format!("vsock accept task: {err}")))??;
+        let _ = std::fs::remove_file(&proxy_path);
+        let stream = tokio::net::UnixStream::from_std(incoming)
+            .map_err(|err| Error::Hypervisor(format!("adopt vsock proxy stream: {err}")))?;
+
+        Ok(BootedVm {
+            link: AgentLink::Connected(Box::new(stream)),
+            host_pid: None,
+        })
+    }
+}
+
+/// A per-VM vsock proxy socket path under the temp directory.
+#[cfg(target_arch = "x86_64")]
+fn proxy_socket_path(id: &str) -> std::path::PathBuf {
+    let safe: String = id
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    std::env::temp_dir().join(format!(
+        "container-native-vsock-{}-{safe}.sock",
+        std::process::id()
+    ))
+}
+
+/// Accept the guest-init connection into the proxy, or time out.
+///
+/// Runs on a blocking thread: the guest may take seconds to reach the init, and
+/// we must not block the async runtime while waiting.
+#[cfg(target_arch = "x86_64")]
+fn accept_agent(
+    listener: &std::os::unix::net::UnixListener,
+    timeout: Duration,
+) -> Result<std::os::unix::net::UnixStream> {
+    use std::time::Instant;
+    listener
+        .set_nonblocking(true)
+        .map_err(|err| Error::Hypervisor(format!("vsock proxy nonblocking: {err}")))?;
+    let deadline = Instant::now() + timeout;
+    loop {
+        match listener.accept() {
+            Ok((stream, _)) => {
+                stream
+                    .set_nonblocking(true)
+                    .map_err(|err| Error::Hypervisor(format!("vsock proxy stream: {err}")))?;
+                return Ok(stream);
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                if Instant::now() >= deadline {
+                    return Err(Error::Hypervisor(
+                        "guest init did not connect to the vsock proxy before the boot deadline \
+                         (the guest could not mount its rootfs, or the init binary is missing)"
+                            .into(),
+                    ));
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Err(err) => {
+                return Err(Error::Hypervisor(format!("vsock proxy accept: {err}")));
+            }
+        }
     }
 }
 
@@ -115,14 +285,16 @@ impl Hypervisor for LinuxHypervisor {
 
     fn pause(&mut self) -> Result<()> {
         #[cfg(target_arch = "x86_64")]
-        if self.machine.is_none() {
-            return Err(Error::Hypervisor(
-                "cannot pause a VM that is not running".into(),
-            ));
+        match &self.vmm {
+            Some(running) => running.pause(),
+            None => {
+                return Err(Error::Hypervisor(
+                    "cannot pause a VM that is not running".into(),
+                ))
+            }
         }
-        // The vCPU thread (see `kvm::run_vcpu`) checks this flag between exits.
-        // TODO(linux): interrupt an in-progress KVM_RUN so pause takes effect
-        // before the next VM exit.
+        // The vCPU thread checks the flag between exits. A `KVM_RUN` already in
+        // progress is not interrupted, so pause takes effect at the next exit.
         self.paused = true;
         Ok(())
     }
@@ -131,6 +303,10 @@ impl Hypervisor for LinuxHypervisor {
         if !self.paused {
             return Err(Error::Hypervisor("VM is not paused".into()));
         }
+        #[cfg(target_arch = "x86_64")]
+        if let Some(running) = &self.vmm {
+            running.resume();
+        }
         self.paused = false;
         Ok(())
     }
@@ -138,7 +314,9 @@ impl Hypervisor for LinuxHypervisor {
     fn shutdown_blocking(&mut self) {
         #[cfg(target_arch = "x86_64")]
         {
-            self.machine.take();
+            // Dropping the VMM joins the vCPU threads and stops device workers
+            // before the guest RAM mapping is released.
+            self.vmm.take();
             self.tap.take();
         }
         self.paused = false;
@@ -191,7 +369,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn parsed_kernel_reaches_kvm_or_the_virtio_todo() {
+    async fn parsed_kernel_reaches_kvm_or_the_boot_handshake() {
         let dir = std::env::temp_dir().join(format!(
             "container-native-kernel-{}-{}",
             std::process::id(),
@@ -206,11 +384,16 @@ mod tests {
         let mut hv = LinuxHypervisor::new();
         let err = match hv.boot(cfg(path)).await {
             Err(err) => err,
-            Ok(_) => panic!("virtio device model is not implemented; boot should fail"),
+            Ok(_) => panic!("without a bootable guest init the handshake must not succeed"),
         };
+        // Either KVM is unavailable (the common case in CI) or the guest never
+        // reached the proxy. Both are the expected outcomes here.
         let msg = err.to_string();
         assert!(
-            msg.contains("kvm") || msg.contains("KVM") || msg.contains("TODO"),
+            msg.contains("kvm")
+                || msg.contains("KVM")
+                || msg.contains("guest init")
+                || msg.contains("vsock"),
             "{msg}"
         );
         let _ = std::fs::remove_dir_all(dir);

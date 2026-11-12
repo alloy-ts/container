@@ -5,7 +5,7 @@
 //! which `Container::create` surfaces instead of pretending the NIC exists.
 
 use std::fs::File;
-use std::io;
+use std::io::{self, Read, Write};
 use std::net::Ipv4Addr;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
@@ -22,7 +22,7 @@ const SIOCSIFNETMASK: libc::c_ulong = 0x891C;
 const SIOCSIFFLAGS: libc::c_ulong = 0x8914;
 
 pub(crate) struct TapDevice {
-    _file: File,
+    file: File,
     /// Interface name (`cn……`). Read by tests; production code closes the fd.
     #[allow(dead_code)]
     pub name: String,
@@ -65,11 +65,50 @@ impl TapDevice {
             }
         };
         configure_address(&plan.tap_name, host, plan.prefix)?;
+        // The virtio-net worker polls the fd, so reads must not block the whole
+        // device thread while the guest queue is short of buffers.
+        set_nonblocking(file.as_raw_fd())?;
         Ok(Self {
-            _file: file,
+            file,
             name: plan.tap_name.clone(),
         })
     }
+
+    /// A second handle to the same tap interface, for the device worker thread.
+    pub(crate) fn try_clone(&self) -> io::Result<Self> {
+        Ok(Self {
+            file: self.file.try_clone()?,
+            name: self.name.clone(),
+        })
+    }
+
+    /// One Ethernet frame from the tap. Blocks until the fd is non-blocking.
+    pub(crate) fn read_frame(&self, buf: &mut [u8]) -> io::Result<usize> {
+        (&self.file).read(buf)
+    }
+
+    /// One Ethernet frame to the tap.
+    pub(crate) fn write_frame(&self, buf: &[u8]) -> io::Result<usize> {
+        (&self.file).write(buf)
+    }
+}
+
+fn set_nonblocking(fd: i32) -> Result<()> {
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+    if flags < 0 {
+        return Err(Error::Resource(format!(
+            "fcntl(F_GETFL) on tap: {}",
+            io::Error::last_os_error()
+        )));
+    }
+    let rc = unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
+    if rc < 0 {
+        return Err(Error::Resource(format!(
+            "fcntl(F_SETFL) on tap: {}",
+            io::Error::last_os_error()
+        )));
+    }
+    Ok(())
 }
 
 fn configure_address(name: &str, addr: Ipv4Addr, prefix: u8) -> Result<()> {

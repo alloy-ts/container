@@ -278,7 +278,7 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
     use std::sync::Arc;
-    use vm_memory::{GuestAddress, GuestMemoryBackend};
+    use vm_memory::{GuestAddress, GuestMemory};
 
     /// Records what the transport drives and offers a fixed register identity.
     #[derive(Default)]

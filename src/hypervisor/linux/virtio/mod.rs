@@ -12,7 +12,9 @@
 //! on the vCPU thread drives the transport while a device worker thread drains
 //! the queues; they meet at the shared [`Interrupt`] line.
 
+pub(crate) mod fs;
 pub(crate) mod mmio;
+pub(crate) mod net;
 pub(crate) mod vsock;
 
 use std::sync::atomic::{AtomicU8, Ordering};

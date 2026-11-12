@@ -52,7 +52,7 @@ src/
   container.rs      Container, Process, and the NAPI class
   proto/            length-prefixed vsock RPC and stdio frames
   hypervisor/       VMM trait
-    linux/          KVM, bzImage boot, TAP, AF_VSOCK (x86_64)
+    linux/          KVM, bzImage boot, virtio-mmio devices, TAP (x86_64)
     macos/          stub: Virtualization.framework + vmnet + VZVirtioSocket
     windows/        stub: WHPX + HNS/slirp + AF_HYPERV
   resource/         per-VM IP plan and virtio-fs share list
@@ -63,7 +63,7 @@ src/
 
 The guest-agent protocol (create, start, exec, stdio, signals, tty resize, stats, logs, delete) is implemented and tested. The reference guest init is the PID 1 this protocol expects; tests run it in-process so the public lifecycle does not need `/dev/kvm`.
 
-On Linux x86_64 the hypervisor really opens `/dev/kvm`, maps guest RAM, creates vCPUs, loads a bzImage, builds a long-mode identity map, and can open a TAP device and an AF_VSOCK port. virtio-fs, virtio-net, and virtio-vsock device emulation are not done, so `Container::create` on the real backend rolls the machine back with an explicit error instead of returning a VM the agent can never reach. macOS and Windows backends compile and return the same kind of error. The Linux path is the one implemented here because this crate is built on Linux x86_64, where KVM, TAP, and AF_VSOCK exist; Virtualization.framework and WHPX do not.
+On Linux x86_64 the hypervisor really opens `/dev/kvm`, maps guest RAM, creates vCPUs, loads a bzImage, builds a long-mode identity map, opens a TAP device, and serves virtio-vsock, virtio-net, and virtio-fs devices over virtio-mmio. Each device model is exercised against in-memory virtqueues in the unit tests; the virtio-fs device carries FUSE requests through an in-process `fuse-backend-rs` passthrough filesystem rooted at the share. Booting still needs a guest image that mounts its rootfs over virtio-fs and connects to the vsock proxy, so without one `Container::create` on the real backend rolls the machine back with an explicit handshake-timeout error instead of returning a VM the agent can never reach. macOS and Windows backends compile and return the same kind of error. The Linux path is the one implemented here because this crate is built on Linux x86_64, where KVM and TAP exist; Virtualization.framework and WHPX do not.
 
 ## Development
 
