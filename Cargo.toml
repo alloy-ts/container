@@ -2,21 +2,26 @@
 name = "container-native"
 version = "0.1.0"
 edition = "2021"
+description = "In-process OCI microVM container runtime (one container = one microVM)"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-napi = { version = "3", features = ["serde-json"] }
+async-trait = "0.1"
+base64 = "0.22"
+libc = "0.2"
+napi = { version = "3", features = ["async", "serde-json", "tokio_rt"] }
 napi-derive = "3"
-oxc = "0.152.0"
-oxc_allocator = "0.152.0"
-oxc_ast = { version = "0.152.0", features = ["serialize"] }
-oxc_estree = { version = "0.152.0", features = ["serialize"] }
-oxc_parser = "0.152.0"
-oxc_span = "0.152.0"
-rocket = "0.5.1"
-serde_json = "1.0.154"
+oci-spec = { version = "0.6.8", features = ["runtime"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+kvm-bindings = { version = "0.10", features = ["fam-wrappers"] }
+kvm-ioctls = "0.19"
 
 [build-dependencies]
 napi-build = "2"
