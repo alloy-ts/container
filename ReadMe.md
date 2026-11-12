@@ -1,6 +1,6 @@
 # @alloy-ts/container
 
-In-process OCI microVM runtime. One `Container` is one microVM — the same model Apple container uses — instead of a CLI wrapper around an external `container` / `docker` / `podman` binary.
+In-process OCI microVM runtime. One `Container` is one microVM.
 
 The public surface is `ContainerOpts`, `Container`, `ExecOpts`, `Process`, and `ContainerState`. Hypervisor handles, TAP devices, virtio shares, and the vsock guest-agent protocol stay inside the crate.
 
