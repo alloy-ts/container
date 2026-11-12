@@ -20,7 +20,13 @@ pub(crate) mod vsock;
 #[cfg(target_arch = "x86_64")]
 mod boot;
 #[cfg(target_arch = "x86_64")]
+pub(crate) mod bus;
+#[cfg(target_arch = "x86_64")]
+mod irq;
+#[cfg(target_arch = "x86_64")]
 mod kvm;
+#[cfg(target_arch = "x86_64")]
+pub(crate) mod virtio;
 
 use async_trait::async_trait;
 

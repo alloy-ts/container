@@ -4,10 +4,9 @@
 //! exist. It is not started today: a guest with no virtio-vsock can never
 //! connect back, and `KVM_RUN` on a real kernel would block the caller.
 
-use std::io;
-
 use kvm_bindings::{kvm_segment, kvm_userspace_memory_region, KVM_MAX_CPUID_ENTRIES};
 use kvm_ioctls::{Kvm, VcpuExit, VcpuFd, VmFd};
+use vm_memory::{GuestAddress, GuestMemoryBackend, GuestMemoryMmap};
 
 use super::boot::{self, LoadedKernel};
 use crate::error::{Error, Result};
@@ -18,7 +17,8 @@ pub(crate) struct KvmMachine {
     vcpus: Vec<VcpuFd>,
     _vm: VmFd,
     _kvm: Kvm,
-    memory: GuestMemory,
+    memory: GuestMemoryMmap,
+    size: usize,
 }
 
 impl KvmMachine {
@@ -34,7 +34,12 @@ impl KvmMachine {
         let vm = kvm
             .create_vm()
             .map_err(|err| Error::Hypervisor(format!("kvm create_vm: {err}")))?;
-        let memory = GuestMemory::new(memory_bytes(memory_mb))?;
+        let size = memory_bytes(memory_mb);
+        let memory = GuestMemoryMmap::from_ranges(&[(GuestAddress(0), size)])
+            .map_err(|err| Error::Hypervisor(format!("allocate guest RAM ({size} bytes): {err}")))?;
+        let host = memory
+            .get_host_address(GuestAddress(0))
+            .map_err(|err| Error::Hypervisor(format!("guest RAM host address: {err}")))?;
         // SAFETY: `memory` lives in this struct for as long as `vm` does, is
         // page-aligned (mmap), and is not aliased. Drop order closes the VM
         // fd before the mapping.
@@ -43,8 +48,8 @@ impl KvmMachine {
                 slot: 0,
                 flags: 0,
                 guest_phys_addr: 0,
-                memory_size: memory.size as u64,
-                userspace_addr: memory.ptr as u64,
+                memory_size: size as u64,
+                userspace_addr: host as u64,
             })
             .map_err(|err| Error::Hypervisor(format!("kvm set_user_memory_region: {err}")))?;
         }
@@ -66,11 +71,27 @@ impl KvmMachine {
             _vm: vm,
             _kvm: kvm,
             memory,
+            size,
         })
     }
 
+    /// Guest RAM, as the `vm-memory` view shared with the vCPU and device
+    /// threads. The mapping is reference counted, so cloning this handle is
+    /// what a worker thread uses to reach guest memory.
+    #[allow(dead_code)]
+    pub(crate) fn memory(&self) -> &GuestMemoryMmap {
+        &self.memory
+    }
+
     pub(crate) fn load_kernel(&mut self, kernel: &[u8], cmdline: &str) -> Result<LoadedKernel> {
-        let mem = self.memory.as_mut_slice();
+        let ptr = self
+            .memory
+            .get_host_address(GuestAddress(0))
+            .map_err(|err| Error::Hypervisor(format!("guest RAM host address: {err}")))?;
+        // SAFETY: the single guest RAM region is uniquely owned by this machine
+        // and no vCPU has run yet, so nothing else can observe the slice. It is
+        // `size` bytes, the region allocated above.
+        let mem = unsafe { std::slice::from_raw_parts_mut(ptr, self.size) };
         let loaded = boot::load_bzimage(kernel, mem, cmdline)?;
         let vcpu = self
             .vcpus
@@ -200,59 +221,24 @@ pub(crate) fn run_vcpu(
     }
 }
 
-struct GuestMemory {
-    ptr: *mut u8,
-    size: usize,
-}
-
-// The mapping is uniquely owned by `KvmMachine` and only touched from the
-// thread that loads the kernel, before any vCPU runs.
-unsafe impl Send for GuestMemory {}
-
-impl GuestMemory {
-    fn new(size: usize) -> Result<Self> {
-        // SAFETY: anonymous private mapping. Size is non-zero and page-aligned
-        // by `memory_bytes`.
-        let ptr = unsafe {
-            libc::mmap(
-                std::ptr::null_mut(),
-                size,
-                libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
-                -1,
-                0,
-            )
-        };
-        if ptr == libc::MAP_FAILED {
-            return Err(Error::Hypervisor(format!(
-                "mmap guest RAM: {}",
-                io::Error::last_os_error()
-            )));
-        }
-        Ok(Self {
-            ptr: ptr as *mut u8,
-            size,
-        })
-    }
-
-    fn as_mut_slice(&mut self) -> &mut [u8] {
-        // SAFETY: the mapping is live, uniquely borrowed, and `size` bytes long.
-        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.size) }
-    }
-}
-
-impl Drop for GuestMemory {
-    fn drop(&mut self) {
-        // SAFETY: `ptr` came from mmap of `size` bytes.
-        unsafe {
-            libc::munmap(self.ptr as *mut libc::c_void, self.size);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn guest_ram_is_a_single_contiguous_region() {
+        let machine_memory = memory_bytes(64);
+        assert!(machine_memory % (2 * 1024 * 1024) == 0);
+        let memory: GuestMemoryMmap =
+            GuestMemoryMmap::from_ranges(&[(GuestAddress(0), machine_memory)]).unwrap();
+        // The whole allocation is one region reachable from guest address 0,
+        // which is what the KVM memory slot and the kernel loader both assume.
+        assert_eq!(memory.iter().count(), 1);
+        assert!(memory.get_host_address(GuestAddress(0)).is_ok());
+        assert!(memory
+            .get_host_address(GuestAddress(machine_memory as u64))
+            .is_err());
+    }
 
     #[test]
     fn serial_reports_transmitter_empty() {
