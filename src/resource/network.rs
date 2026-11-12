@@ -1,5 +1,5 @@
 use std::net::{IpAddr, Ipv4Addr};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Mutex;
 
 use crate::error::{Error, Result};
 use crate::types::{NetworkConfig, NetworkMode};
@@ -13,12 +13,15 @@ pub(crate) struct NetworkPlan {
     pub prefix: u8,
     pub gateway: IpAddr,
     pub mac: [u8; 6],
+    pub(crate) leased_host: Option<u8>,
 }
 
 const HOST: Ipv4Addr = Ipv4Addr::new(192, 168, 127, 1);
 
-/// Next guest host address in 192.168.127.0/24. .0 is the subnet, .1 is the gateway.
-static NEXT_HOST: AtomicU32 = AtomicU32::new(2);
+/// Addresses leased from 192.168.127.0/24. Indexes 0 and 1 are reserved for
+/// the subnet and host gateway. A mutex is sufficient here: allocation is a
+/// short, process-local operation and never crosses an await point.
+static LEASED_HOSTS: Mutex<[bool; 256]> = Mutex::new([false; 256]);
 
 pub(crate) fn plan(id: &str, config: &NetworkConfig) -> Result<Option<NetworkPlan>> {
     match config.mode {
@@ -32,21 +35,16 @@ pub(crate) fn plan(id: &str, config: &NetworkConfig) -> Result<Option<NetworkPla
 }
 
 fn dedicated(id: &str, config: &NetworkConfig) -> Result<NetworkPlan> {
-    let guest_ip = match config.guest_ip {
-        Some(IpAddr::V4(addr)) => addr,
+    let (guest_ip, leased_host) = match config.guest_ip {
+        Some(IpAddr::V4(addr)) => (addr, None),
         Some(IpAddr::V6(_)) => {
             return Err(Error::Resource(
                 "TODO: IPv6 tap addressing is not implemented".into(),
             ));
         }
         None => {
-            let host = NEXT_HOST.fetch_add(1, Ordering::Relaxed);
-            if host >= 254 {
-                return Err(Error::Resource(
-                    "dedicated IPv4 pool 192.168.127.0/24 is exhausted".into(),
-                ));
-            }
-            Ipv4Addr::new(192, 168, 127, host as u8)
+            let host = lease_host()?;
+            (Ipv4Addr::new(192, 168, 127, host), Some(host))
         }
     };
     let gateway = match config.gateway {
@@ -69,7 +67,32 @@ fn dedicated(id: &str, config: &NetworkConfig) -> Result<NetworkPlan> {
         prefix: 24,
         gateway: IpAddr::V4(gateway),
         mac,
+        leased_host,
     })
+}
+
+fn lease_host() -> Result<u8> {
+    let mut leased = LEASED_HOSTS
+        .lock()
+        .map_err(|_| Error::Resource("dedicated IPv4 lease table is poisoned".into()))?;
+    for host in 2u8..=253 {
+        if !leased[host as usize] {
+            leased[host as usize] = true;
+            return Ok(host);
+        }
+    }
+    Err(Error::Resource(
+        "dedicated IPv4 pool 192.168.127.0/24 is exhausted".into(),
+    ))
+}
+
+pub(crate) fn release(plan: &mut NetworkPlan) {
+    let Some(host) = plan.leased_host.take() else {
+        return;
+    };
+    if let Ok(mut leased) = LEASED_HOSTS.lock() {
+        leased[host as usize] = false;
+    }
 }
 
 fn tap_name(id: &str) -> String {
@@ -132,5 +155,18 @@ mod tests {
         let plan = plan("beta", &cfg).unwrap().unwrap();
         assert_eq!(plan.guest_ip, IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)));
         assert_eq!(plan.mac, [0x02, 0, 0, 0, 0, 0x0a]);
+    }
+
+    #[test]
+    fn released_addresses_are_reused() {
+        let mut first = plan("first", &NetworkConfig::dedicated()).unwrap().unwrap();
+        let address = first.guest_ip;
+        release(&mut first);
+
+        let mut second = plan("second", &NetworkConfig::dedicated())
+            .unwrap()
+            .unwrap();
+        assert_eq!(second.guest_ip, address);
+        release(&mut second);
     }
 }

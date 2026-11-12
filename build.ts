@@ -1,27 +1,3 @@
-import { createRequire } from "node:module";
-
-// --- Workaround: neutralize the NAPI CLI's `/bin/ps` "process incarnation" probe.
-// This environment blocks spawning `/bin/ps` (EPERM), which the CLI uses only for
-// its build-cache reconciliation and which is safe to stub. We patch the mutable
-// CJS `child_process` module so the CLI's live ESM binding picks up the override.
-const require = createRequire(import.meta.url);
-const childProcess = require("node:child_process");
-const origExecFile = childProcess.execFile;
-childProcess.execFile = function patchedExecFile(command, args, options, callback) {
-  let cb = callback;
-  let opts = options;
-  if (typeof opts === "function") {
-    cb = opts;
-    opts = undefined;
-  }
-  const cmd = typeof command === "string" ? command : String(command);
-  if (cmd === "/bin/ps" || cmd.endsWith("/ps")) {
-    if (cb) (globalThis.setImmediate ?? setTimeout)(() => cb(null, ""));
-    return {};
-  }
-  return origExecFile.call(this, command, args, opts, cb);
-};
-
 async function run() {
   const args = process.argv.slice(2);
   const isRelease = args.includes("--release") || args.includes("-r");
@@ -36,8 +12,10 @@ async function run() {
   const cli = new NapiCli();
   await cli.build({
     platform: true,
-    esm: true,
+    format: "esm",
     outputDir: "./dist",
+    jsBinding: "index.js",
+    dts: "index.d.ts",
     release: isRelease,
     target,
     useNapiCross,
@@ -46,7 +24,7 @@ async function run() {
   });
 }
 
-void run().catch((err) => {
+await run().catch((err) => {
   console.error(err);
   process.exit(1);
 });

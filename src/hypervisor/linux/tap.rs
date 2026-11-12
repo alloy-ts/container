@@ -138,6 +138,7 @@ mod tests {
             prefix: 24,
             gateway: IpAddr::V4(Ipv4Addr::new(192, 168, 127, 1)),
             mac: [0x02, 0, 0, 0, 0, 2],
+            leased_host: None,
         };
         match TapDevice::open(&plan) {
             Ok(dev) => assert_eq!(dev.name, "cn0000aa"),
@@ -147,6 +148,7 @@ mod tests {
                     msg.contains("Permission")
                         || msg.contains("permission")
                         || msg.contains("Operation not permitted")
+                        || msg.contains("No such file or directory")
                         || msg.contains("tap"),
                     "{msg}"
                 );

@@ -1102,6 +1102,24 @@ mod tests {
         assert!(err.to_string().contains("pause"), "{err}");
     }
 
+    #[tokio::test]
+    async fn rejects_unsupported_isolation_instead_of_running_unconfined() {
+        let dir = scratch("isolated-root");
+        let opts = ContainerOpts::builder("isolated")
+            .rootfs(RootfsSource::Directory(dir))
+            .args(["/bin/true"])
+            .mount(crate::types::Mount::bind("/tmp", "/data"))
+            .network(NetworkConfig::none())
+            .build()
+            .unwrap();
+
+        let err = match Container::create_with(opts, Box::new(LoopbackHypervisor::new())).await {
+            Err(err) => err,
+            Ok(_) => panic!("unsupported OCI isolation must fail closed"),
+        };
+        assert!(err.to_string().contains("refusing to run"), "{err}");
+    }
+
     #[test]
     fn builder_rejects_a_bad_id() {
         let err = ContainerOpts::builder("has space")

@@ -49,5 +49,15 @@ impl ResourceManager {
 
     /// Release host state recorded here. The TAP file descriptor itself is
     /// closed by the hypervisor that opened it.
-    pub(crate) fn release(&mut self) {}
+    pub(crate) fn release(&mut self) {
+        if let Some(network) = &mut self.network {
+            network::release(network);
+        }
+    }
+}
+
+impl Drop for ResourceManager {
+    fn drop(&mut self) {
+        self.release();
+    }
 }

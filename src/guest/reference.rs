@@ -6,8 +6,9 @@
 //! execution here is the guest init's `exec`, not the old host CLI delegation.
 //!
 //! TODO(guest-vm): ship this as a static binary inside the guest rootfs and
-//! teach it to apply OCI namespaces, mounts, and user switching. Those steps
-//! need a real guest mount namespace and are recorded but not performed.
+//! teach it to apply OCI namespaces, mounts, and user switching. Until then,
+//! unsupported isolation requests fail closed instead of being silently
+//! accepted and executed with host semantics by the loopback backend.
 
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -172,8 +173,7 @@ impl Guest {
                 oci_config_json,
                 memory_limit_bytes,
             } => {
-                // TODO(guest-vm): create the mount/pid/uts/ipc/user/net namespaces
-                // listed in `namespaces` and mount `mounts` before exec.
+                validate_isolation_requests(&mounts, &namespaces)?;
                 self.config = Some(GuestConfig {
                     args,
                     env,
@@ -447,6 +447,16 @@ impl Guest {
         self.procs.lock().unwrap_or_else(|e| e.into_inner()).clear();
         self.pending.clear();
     }
+}
+
+fn validate_isolation_requests(mounts: &[MountSpec], namespaces: &[NamespaceSpec]) -> Result<()> {
+    if !mounts.is_empty() || !namespaces.is_empty() {
+        return Err(Error::Agent(
+            "OCI mounts and namespaces are not available in the reference guest; refusing to run without the requested isolation"
+                .into(),
+        ));
+    }
+    Ok(())
 }
 
 async fn send_reply(tx: &mpsc::Sender<Frame>, id: u32, response: Response) -> Result<()> {

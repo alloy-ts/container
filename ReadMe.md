@@ -2,39 +2,15 @@
 
 In-process OCI microVM runtime. One `Container` is one microVM.
 
-The public surface is `ContainerOpts`, `Container`, `ExecOpts`, `Process`, and `ContainerState`. Hypervisor handles, TAP devices, virtio shares, and the vsock guest-agent protocol stay inside the crate.
+The JavaScript surface is `ContainerOpts`, `Container`, `ExecOpts`, `Process`, and `ContainerState`. Hypervisor handles, TAP devices, virtio shares, and the vsock guest-agent protocol stay internal.
 
-## Rust
-
-```rust
-use container_native::{Container, ContainerOpts, RootfsSource};
-
-let opts = ContainerOpts::builder("app")
-    .rootfs(RootfsSource::Directory("/var/lib/app/rootfs".into()))
-    .kernel_path("/var/lib/container-native/vmlinux")
-    .vcpus(2)
-    .memory_mb(512)
-    .args(["/bin/sh", "-c", "echo hello"])
-    .env("HOME", "/root")
-    .build()?;
-
-// Or ingest a bundle: ContainerOpts::from_oci_bundle(Path::new("/bundle"))
-let mut container = Container::create(opts).await?;
-let mut process = container.start().await?;
-let status = process.wait().await?;
-container.delete().await?;
-```
-
-`create` boots the microVM and connects to the guest init without running the entrypoint. `start` runs it and returns a `Process` (pid, stdin/stdout/stderr, `wait`, `kill`, `resize_tty`). `exec` starts another process in the same VM. `state`, `kill`, `wait`, `logs`, `stats`, `pause`, `resume`, `id`, and `ip_addr` cover the OCI lifecycle and the Apple-container extras. `Drop` shuts the VM down if `delete` was not called.
-
-## JavaScript
+## Usage
 
 `Container.create` and `containerOptsFromOciBundle` are the NAPI bindings. Lifecycle methods return promises.
 
 ```ts
-import { Container, containerOptsFromOciBundle } from "@alloy-ts/container";
+import { Container } from "@alloy-ts/container";
 
-const opts = containerOptsFromOciBundle("/path/to/bundle");
 const container = await Container.create({
   id: "app",
   rootfs: { kind: "directory", path: "/var/lib/app/rootfs" },
@@ -47,6 +23,26 @@ const process = await container.start();
 console.log(process.pid, await process.wait());
 await container.delete();
 ```
+
+`create` boots one microVM and connects to its guest agent without running the entrypoint. `start` runs the configured entrypoint and returns an independent `Process` handle. Use `exec` for additional processes, `state` and `stats` for inspection, `pause` and `resume` for vCPU control, and `delete` for deterministic cleanup.
+
+For an OCI bundle, parse `config.json` into the same options object before creating the container:
+
+```ts
+import { Container, containerOptsFromOciBundle } from "@alloy-ts/container";
+
+const opts = containerOptsFromOciBundle("/path/to/bundle");
+const container = await Container.create(opts);
+
+try {
+  const process = await container.start();
+  console.log(await process.wait());
+} finally {
+  await container.delete();
+}
+```
+
+See [`examples/container.ts`](examples/container.ts) for lifecycle, `exec`, output streaming, signals, and cleanup in one example.
 
 ## Layout
 
