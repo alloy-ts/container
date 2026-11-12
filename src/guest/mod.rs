@@ -31,6 +31,7 @@ pub use transport::{BoxedStream, StreamConnector};
 use std::collections::HashMap;
 use std::io;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
@@ -77,17 +78,86 @@ impl ExitWait {
     }
 }
 
+/// Per-direction cap on process output buffered on the host.
+///
+/// The guest can produce output faster than the caller drains it. Stdout and
+/// stderr are therefore accounted against a byte budget; once a direction
+/// reaches this cap, further output is dropped instead of growing host memory
+/// without bound.
+const STDIO_CAP_BYTES: usize = 8 * 1024 * 1024;
+
+/// Reservation counter enforcing [`STDIO_CAP_BYTES`] for one output direction.
+struct ByteBudget {
+    max: usize,
+    used: AtomicUsize,
+}
+
+impl ByteBudget {
+    fn new(max: usize) -> Self {
+        Self {
+            max,
+            used: AtomicUsize::new(0),
+        }
+    }
+
+    /// Reserve `len` bytes. Returns `false` when the budget is exhausted, in
+    /// which case the caller drops the chunk.
+    fn try_reserve(&self, len: usize) -> bool {
+        let mut current = self.used.load(Ordering::Acquire);
+        loop {
+            match current.checked_add(len) {
+                Some(next) if next <= self.max => {
+                    match self.used.compare_exchange_weak(
+                        current,
+                        next,
+                        Ordering::AcqRel,
+                        Ordering::Acquire,
+                    ) {
+                        Ok(_) => return true,
+                        Err(actual) => current = actual,
+                    }
+                }
+                _ => return false,
+            }
+        }
+    }
+
+    /// Release `len` bytes once the caller has consumed them.
+    fn release(&self, len: usize) {
+        self.used.fetch_sub(len, Ordering::AcqRel);
+    }
+}
+
+/// One process output direction: the chunk channel plus its byte budget.
+struct StdioSink {
+    tx: mpsc::UnboundedSender<Vec<u8>>,
+    budget: Arc<ByteBudget>,
+}
+
 struct ProcSink {
-    stdout: mpsc::UnboundedSender<Vec<u8>>,
-    stderr: mpsc::UnboundedSender<Vec<u8>>,
+    stdout: StdioSink,
+    stderr: StdioSink,
     exit_tx: watch::Sender<Option<ExitStatus>>,
 }
 
-#[derive(Default)]
 struct EarlyIo {
     stdout: Vec<Vec<u8>>,
     stderr: Vec<Vec<u8>>,
     exit: Option<ExitStatus>,
+    out_budget: Arc<ByteBudget>,
+    err_budget: Arc<ByteBudget>,
+}
+
+impl Default for EarlyIo {
+    fn default() -> Self {
+        Self {
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+            exit: None,
+            out_budget: Arc::new(ByteBudget::new(STDIO_CAP_BYTES)),
+            err_budget: Arc::new(ByteBudget::new(STDIO_CAP_BYTES)),
+        }
+    }
 }
 
 enum ResponseMsg {
@@ -128,6 +198,11 @@ impl AgentInner {
                     signal: None,
                 }));
             }
+        }
+        // No more frames will arrive, so buffered pre-registration output can
+        // never be claimed. Drop it rather than retaining it forever.
+        if let Ok(mut early) = self.early.lock() {
+            early.clear();
         }
     }
 
@@ -203,25 +278,44 @@ impl AgentInner {
         let (out_tx, out_rx) = mpsc::unbounded_channel();
         let (err_tx, err_rx) = mpsc::unbounded_channel();
         let (exit_tx, exit_rx) = watch::channel(None);
-        if let Ok(mut early) = self.early.lock() {
-            if let Some(buffered) = early.remove(&pid) {
-                for chunk in buffered.stdout {
-                    let _ = out_tx.send(chunk);
-                }
-                for chunk in buffered.stderr {
-                    let _ = err_tx.send(chunk);
-                }
-                if let Some(status) = buffered.exit {
-                    let _ = exit_tx.send(Some(status));
-                }
+        let buffered = self
+            .early
+            .lock()
+            .ok()
+            .and_then(|mut early| early.remove(&pid));
+        // Reuse the budgets that accounted for the pre-registration output so
+        // cpu/memory limits span the whole process lifetime, not just the
+        // window after registration.
+        let (out_budget, err_budget) = match &buffered {
+            Some(io) => (io.out_budget.clone(), io.err_budget.clone()),
+            None => (
+                Arc::new(ByteBudget::new(STDIO_CAP_BYTES)),
+                Arc::new(ByteBudget::new(STDIO_CAP_BYTES)),
+            ),
+        };
+        if let Some(buffered) = buffered {
+            for chunk in buffered.stdout {
+                let _ = out_tx.send(chunk);
+            }
+            for chunk in buffered.stderr {
+                let _ = err_tx.send(chunk);
+            }
+            if let Some(status) = buffered.exit {
+                let _ = exit_tx.send(Some(status));
             }
         }
         if let Ok(mut procs) = self.procs.lock() {
             procs.insert(
                 pid,
                 ProcSink {
-                    stdout: out_tx,
-                    stderr: err_tx,
+                    stdout: StdioSink {
+                        tx: out_tx,
+                        budget: out_budget.clone(),
+                    },
+                    stderr: StdioSink {
+                        tx: err_tx,
+                        budget: err_budget.clone(),
+                    },
                     exit_tx,
                 },
             );
@@ -232,30 +326,44 @@ impl AgentInner {
             // directions the request asked for. The raw receivers live in
             // `ProcessIo` until then; see `AgentClient::finish_stdio`.
             stdin: None,
-            stdout: Some(Box::new(ByteReader::new(out_rx))),
-            stderr: Some(Box::new(ByteReader::new(err_rx))),
+            stdout: Some(Box::new(ByteReader::new(out_rx, out_budget))),
+            stderr: Some(Box::new(ByteReader::new(err_rx, err_budget))),
             exit: ExitWait { rx: exit_rx },
         }
     }
 
     fn push_stdio(&self, pid: u32, is_stdout: bool, data: Vec<u8>) {
+        if data.is_empty() {
+            return;
+        }
         if let Ok(procs) = self.procs.lock() {
             if let Some(proc) = procs.get(&pid) {
-                let tx = if is_stdout {
+                let sink = if is_stdout {
                     &proc.stdout
                 } else {
                     &proc.stderr
                 };
-                let _ = tx.send(data);
+                // Bound host memory: drop the chunk when the caller is not
+                // draining this direction.
+                if sink.budget.try_reserve(data.len()) {
+                    let _ = sink.tx.send(data);
+                }
                 return;
             }
         }
         if let Ok(mut early) = self.early.lock() {
             let slot = early.entry(pid).or_default();
-            if is_stdout {
-                slot.stdout.push(data);
+            let budget = if is_stdout {
+                slot.out_budget.clone()
             } else {
-                slot.stderr.push(data);
+                slot.err_budget.clone()
+            };
+            if budget.try_reserve(data.len()) {
+                if is_stdout {
+                    slot.stdout.push(data);
+                } else {
+                    slot.stderr.push(data);
+                }
             }
         }
     }
@@ -528,15 +636,17 @@ struct ByteReader {
     buf: Vec<u8>,
     pos: usize,
     eof: bool,
+    budget: Arc<ByteBudget>,
 }
 
 impl ByteReader {
-    fn new(rx: mpsc::UnboundedReceiver<Vec<u8>>) -> Self {
+    fn new(rx: mpsc::UnboundedReceiver<Vec<u8>>, budget: Arc<ByteBudget>) -> Self {
         Self {
             rx,
             buf: Vec::new(),
             pos: 0,
             eof: false,
+            budget,
         }
     }
 }
@@ -555,6 +665,13 @@ impl AsyncRead for ByteReader {
                 let n = (self.buf.len() - self.pos).min(buf.remaining());
                 buf.put_slice(&self.buf[self.pos..self.pos + n]);
                 self.pos += n;
+                if self.pos == self.buf.len() {
+                    // The chunk now lives in the caller's buffer, so its bytes
+                    // no longer count against the output budget.
+                    self.budget.release(self.buf.len());
+                    self.buf.clear();
+                    self.pos = 0;
+                }
                 return Poll::Ready(Ok(()));
             }
             if self.eof {

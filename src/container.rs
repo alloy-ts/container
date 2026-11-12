@@ -9,6 +9,7 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use oci_spec::runtime::Spec;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::error::{Error, Result};
@@ -228,15 +229,21 @@ impl Container {
         Ok(Process::from_io(io, agent, tty))
     }
 
-    pub async fn wait(&self) -> Result<ExitStatus> {
-        let mut exit = {
-            let inner = lock(&self.inner)?;
-            inner.primary_exit.clone().ok_or(Error::InvalidState {
-                from: inner.status,
-                op: "wait",
-            })?
-        };
-        let status = exit.wait().await?;
+    /// Snapshot handle for the primary process exit.
+    ///
+    /// Split out of [`Container::wait`] so the NAPI layer can await the exit
+    /// without holding the container mutex. Holding it across the whole wait is
+    /// what let `container.wait()` block a concurrent `kill` / `delete`.
+    pub(crate) fn exit_handle(&self) -> Result<ExitWait> {
+        let inner = lock(&self.inner)?;
+        inner.primary_exit.clone().ok_or(Error::InvalidState {
+            from: inner.status,
+            op: "wait",
+        })
+    }
+
+    /// Record that the primary process has exited.
+    pub(crate) fn mark_stopped(&self) -> Result<()> {
         let mut inner = lock(&self.inner)?;
         if matches!(
             inner.status,
@@ -244,6 +251,13 @@ impl Container {
         ) {
             inner.status = ContainerStatus::Stopped;
         }
+        Ok(())
+    }
+
+    pub async fn wait(&self) -> Result<ExitStatus> {
+        let mut exit = self.exit_handle()?;
+        let status = exit.wait().await?;
+        self.mark_stopped()?;
         Ok(status)
     }
 
@@ -485,6 +499,13 @@ pub struct JsContainerOpts {
     pub mounts: Option<Vec<JsMount>>,
     pub network: Option<JsNetwork>,
     pub tty: Option<bool>,
+    /// Raw OCI `config.json` as JSON. Preserved by
+    /// [`container_opts_from_oci_bundle`] so that namespaces and the rest of the
+    /// raw OCI configuration survive the trip through JavaScript and are
+    /// forwarded to the guest over vsock.
+    pub oci_spec: Option<String>,
+    /// Bundle directory, when the options came from an OCI bundle.
+    pub bundle_path: Option<String>,
 }
 
 #[napi(object, js_name = "ExecOpts")]
@@ -592,6 +613,17 @@ fn js_opts(opts: JsContainerOpts) -> Result<ContainerOpts> {
             });
         }
     }
+    // The builder only carries the fields it knows about. Restore the raw OCI
+    // configuration and bundle path so `Container::create` can forward
+    // namespaces and `oci_config_json` to the guest instead of dropping them.
+    if let Some(raw) = opts.oci_spec {
+        let spec: Spec = serde_json::from_str(&raw)
+            .map_err(|err| Error::InvalidOpts(format!("invalid ociSpec JSON: {err}")))?;
+        builder = builder.oci_spec(spec);
+    }
+    if let Some(bundle) = opts.bundle_path {
+        builder = builder.bundle_path(bundle);
+    }
     builder.build()
 }
 
@@ -620,6 +652,13 @@ fn js_exit(status: ExitStatus) -> JsExitStatus {
 pub fn container_opts_from_oci_bundle(bundle_path: String) -> napi::Result<JsContainerOpts> {
     let opts =
         ContainerOpts::from_oci_bundle(std::path::Path::new(&bundle_path)).map_err(to_napi)?;
+    // Carry the raw OCI configuration and bundle directory out to JavaScript so
+    // `Container.create` can hand them back to the builder (see `js_opts`).
+    let oci_spec = opts
+        .oci_spec
+        .as_ref()
+        .and_then(|spec| serde_json::to_string(spec).ok());
+    let bundle = opts.bundle_path.as_ref().map(|p| p.display().to_string());
     Ok(JsContainerOpts {
         id: opts.id,
         rootfs: JsRootfs {
@@ -667,6 +706,8 @@ pub fn container_opts_from_oci_bundle(bundle_path: String) -> napi::Result<JsCon
             mac: opts.network.mac,
         }),
         tty: Some(opts.tty),
+        oci_spec,
+        bundle_path: bundle,
     })
 }
 
@@ -763,9 +804,26 @@ impl JsContainer {
 
     #[napi]
     pub async fn wait(&self) -> napi::Result<JsExitStatus> {
-        let guard = self.inner.lock().await;
-        let container = guard.as_ref().ok_or_else(deleted)?;
-        Ok(js_exit(container.wait().await.map_err(to_napi)?))
+        // Snapshot the exit handle under a brief lock and then await it *without*
+        // the guard held. Holding the outer mutex across the whole wait is what
+        // let a concurrent `kill` / `delete` starve: neither could reach the
+        // container to make the process exit, so `wait` never returned.
+        let mut exit = {
+            let guard = self.inner.lock().await;
+            let container = guard.as_ref().ok_or_else(deleted)?;
+            container.exit_handle().map_err(to_napi)?
+        };
+        let status = exit.wait().await.map_err(to_napi)?;
+        {
+            // Re-lock only briefly to record the stop. The container may have
+            // been deleted while we awaited, in which case there is nothing to
+            // update.
+            let guard = self.inner.lock().await;
+            if let Some(container) = guard.as_ref() {
+                container.mark_stopped().map_err(to_napi)?;
+            }
+        }
+        Ok(js_exit(status))
     }
 
     #[napi]
@@ -1173,5 +1231,59 @@ mod tests {
         assert_eq!(opts.mounts.len(), 1);
         assert!(opts.oci_spec.is_some());
         assert_eq!(opts.rootfs.path(), dir.join("rootfs"));
+    }
+
+    #[test]
+    fn oci_bundle_survives_the_js_round_trip() {
+        let dir = scratch("js-bundle");
+        std::fs::create_dir_all(dir.join("rootfs")).unwrap();
+        let config = r#"{
+            "ociVersion": "1.2.0",
+            "process": {
+                "terminal": false,
+                "user": {"uid": 0, "gid": 0},
+                "args": ["/bin/sh", "-c", "echo hi"],
+                "cwd": "/work"
+            },
+            "root": {"path": "rootfs", "readonly": false},
+            "linux": {
+                "namespaces": [{"type": "pid"}, {"type": "mount"}]
+            }
+        }"#;
+        std::fs::write(dir.join("config.json"), config).unwrap();
+
+        // Mirrors `containerOptsFromOciBundle(dir)` followed by
+        // `Container.create(opts)`.
+        let js = container_opts_from_oci_bundle(dir.display().to_string()).unwrap();
+        let opts = js_opts(js).unwrap();
+
+        let spec = opts
+            .oci_spec
+            .as_ref()
+            .expect("oci_spec must survive the JS round trip");
+        assert_eq!(crate::types::namespaces_from_spec(spec).len(), 2);
+        assert_eq!(opts.bundle_path.as_deref(), Some(dir.as_path()));
+    }
+
+    #[tokio::test]
+    async fn js_wait_does_not_starve_a_concurrent_kill() {
+        // Regression: the NAPI `wait` used to hold the container mutex across
+        // the whole await, so a concurrent `kill` could never reach the process
+        // to make it exit and `wait` deadlocked.
+        let mut container = boot(&["/bin/sleep", "30"]).await;
+        let _primary = container.start().await.unwrap();
+        let js = JsContainer {
+            inner: tokio::sync::Mutex::new(Some(container)),
+        };
+
+        let status = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            let (status, killed) = tokio::join!(js.wait(), js.kill(9));
+            killed.unwrap();
+            status.unwrap()
+        })
+        .await
+        .expect("wait() must not block a concurrent kill()");
+
+        assert!(status.code != 0, "SIGKILL should not report success");
     }
 }
