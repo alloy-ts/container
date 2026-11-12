@@ -6,12 +6,13 @@
 //! operations (`exec`, `wait`, `logs`, `ip_addr`, `stats`, `pause` / `resume`).
 //! [`Process`] is the handle returned by `start` and `exec`.
 //!
-//! The hypervisor, virtio resources, guest-agent protocol, and vsock framing
-//! stay private behind [`Container`].
+//! The hypervisor, virtio resources, and vsock framing stay private behind
+//! [`Container`]. The cross-platform [`guest`] control plane is exposed for
+//! hosts that drive a guest init directly.
 
 mod container;
 mod error;
-mod guest;
+pub mod guest;
 mod hypervisor;
 mod proto;
 mod resource;

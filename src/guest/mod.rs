@@ -1,11 +1,32 @@
 //! Host-side client for the guest init.
 //!
-//! [`AgentClient`] speaks the [`crate::proto`] framing over any
-//! `AsyncRead + AsyncWrite` stream. Production Linux code connects that stream
-//! with AF_VSOCK; tests (and any backend that can hand back a pipe) pass the
-//! stream in directly. [`reference`] is the guest-side peer of this client.
+//! Two clients live here:
+//!
+//! * [`AgentClient`] — the internal, JSON-framed client the [`crate::Container`]
+//!   runtime drives today. Production Linux code connects its stream over
+//!   AF_VSOCK; tests pass a pipe in directly. [`reference`] is its guest-side
+//!   peer.
+//! * [`GuestAgent`] — the cross-platform control plane. It speaks `postcard`
+//!   frames over a length-delimited stream (see [`proto`]), multiplexes many
+//!   concurrent callers with `tower`, and is free of `RawFd` / `unsafe`. Host
+//!   backends select the stream by injecting a [`StreamConnector`].
 
+mod client;
+mod config;
+mod error;
+mod log_forwarder;
+mod proto;
 mod reference;
+mod transport;
+
+pub use client::{Agent, GuestAgent};
+pub use config::AgentConfig;
+pub use error::AgentError;
+pub use proto::{
+    ContainerStats as GuestContainerStats, CopyFileRequest, CreateContainerRequest,
+    ExecProcessRequest, HealthStatus, MountSpec, RpcFrame, RpcRequest, RpcResponse,
+};
+pub use transport::{BoxedStream, StreamConnector};
 
 use std::collections::HashMap;
 use std::io;
