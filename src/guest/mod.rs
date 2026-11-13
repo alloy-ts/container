@@ -19,6 +19,9 @@ mod proto;
 mod reference;
 mod transport;
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+mod init;
+
 pub use client::{Agent, GuestAgent};
 pub use config::AgentConfig;
 pub use error::AgentError;
@@ -54,6 +57,28 @@ pub(crate) use reference::serve as serve_reference;
 pub(crate) fn link_reference_guest() {
     let _entry = serve_reference::<tokio::io::DuplexStream>;
     std::hint::black_box(_entry);
+}
+
+/// PID 1 for a Linux x86_64 microVM.
+///
+/// The hypervisor boots a kernel with this binary as `/init` (shipped inside the
+/// initramfs). It mounts the virtio-fs share tagged `rootfs` as the new root,
+/// brings up `/proc`, `/sys`, and `/dev`, then connects to the host agent over
+/// `AF_VSOCK` and runs the reference guest loop.
+///
+/// Runs inside the guest only. On the host, or any other target, it returns an
+/// error instead of pretending to boot.
+pub async fn run_guest_init() -> Result<()> {
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    {
+        init::serve_as_init().await
+    }
+    #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+    {
+        Err(Error::Hypervisor(
+            "the guest init is only implemented for Linux x86_64".into(),
+        ))
+    }
 }
 
 /// Shared exit notification. `watch` does not drop updates between the

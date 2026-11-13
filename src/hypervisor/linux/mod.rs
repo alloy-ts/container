@@ -10,9 +10,10 @@
 //!   * wait for the guest init to connect into the vsock proxy and hand that
 //!     stream to the agent client
 //!
-//! virtio-fs, virtio-net, and virtio-vsock devices are served over virtio-mmio.
-//! What is not implemented yet is a guest image (a static init that mounts its
-//! rootfs over virtio-fs and connects to the vsock proxy), so `boot` runs the
+//! virtio-fs, virtio-net, and virtio-vsock devices are served over virtio-mmio,
+//! and the loader places an initramfs (the `guest-init` PID-1 binary) in guest
+//! RAM for the guest to run. `boot` still needs a bootable image — a kernel with
+//! the virtio drivers built in plus that initramfs — so without one it runs the
 //! machine and reports the handshake failure rather than pretending to succeed.
 //! arm64 Linux is a stub: the kernel loader is x86_64 only.
 
@@ -97,6 +98,16 @@ impl LinuxHypervisor {
         // Fail before allocating guest RAM when the image is not a bzImage.
         boot::validate_header(&kernel)?;
 
+        let initramfs = match &cfg.initramfs_path {
+            Some(path) => std::fs::read(path).map_err(|err| {
+                Error::Hypervisor(format!(
+                    "failed to read initramfs {}: {err}",
+                    path.display()
+                ))
+            })?,
+            None => Vec::new(),
+        };
+
         let mut machine = KvmMachine::create(cfg.vcpus, cfg.memory_mb)?;
 
         // Place the virtio-mmio devices and extend the kernel command line so
@@ -111,7 +122,7 @@ impl LinuxHypervisor {
         placements.extend(net_slot);
         placements.extend(fs_slots.iter().copied());
         let cmdline = virtio::append_device_args(&cfg.cmdline, &placements);
-        machine.load_kernel(&kernel, &cmdline)?;
+        machine.load_kernel(&kernel, &initramfs, &cmdline)?;
 
         // In-kernel LAPIC/IOAPIC/PIT, plus a routable line per device irqfd.
         let lines: Vec<u32> = placements.iter().map(|(_, irq)| *irq).collect();
@@ -346,6 +357,7 @@ mod tests {
             vcpus: 1,
             memory_mb: 64,
             kernel_path: kernel,
+            initramfs_path: None,
             cmdline: "console=ttyS0".into(),
             vsock_cid: 3,
             vsock_port: 1024,

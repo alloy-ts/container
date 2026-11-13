@@ -52,6 +52,9 @@ pub(crate) struct VmConfig {
     pub vcpus: u32,
     pub memory_mb: u64,
     pub kernel_path: PathBuf,
+    /// Optional initramfs/initrd image loaded next to the kernel. The guest
+    /// init lives here, so a full boot needs one.
+    pub initramfs_path: Option<PathBuf>,
     pub cmdline: String,
     pub vsock_cid: u32,
     pub vsock_port: u32,

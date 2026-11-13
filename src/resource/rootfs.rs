@@ -12,9 +12,8 @@ pub(crate) struct PreparedRootfs {
 
 /// A directory or image the hypervisor should expose to the guest.
 ///
-/// TODO(linux): the virtio-fs (or virtio-blk, for erofs / block) device model
-/// that consumes these shares is not implemented. The share list is still
-/// validated and passed into the VM config.
+/// Each share becomes a virtio-fs device over virtio-mmio; the guest mounts it
+/// by `tag`. The share list is validated here and passed into the VM config.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VirtioFsShare {
     pub tag: String,

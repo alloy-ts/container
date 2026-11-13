@@ -36,8 +36,9 @@ impl KvmMachine {
             .create_vm()
             .map_err(|err| Error::Hypervisor(format!("kvm create_vm: {err}")))?;
         let size = memory_bytes(memory_mb);
-        let memory = GuestMemoryMmap::from_ranges(&[(GuestAddress(0), size)])
-            .map_err(|err| Error::Hypervisor(format!("allocate guest RAM ({size} bytes): {err}")))?;
+        let memory = GuestMemoryMmap::from_ranges(&[(GuestAddress(0), size)]).map_err(|err| {
+            Error::Hypervisor(format!("allocate guest RAM ({size} bytes): {err}"))
+        })?;
         let host = memory
             .get_host_address(GuestAddress(0))
             .map_err(|err| Error::Hypervisor(format!("guest RAM host address: {err}")))?;
@@ -94,7 +95,14 @@ impl KvmMachine {
         std::mem::take(&mut self.vcpus)
     }
 
-    pub(crate) fn load_kernel(&mut self, kernel: &[u8], cmdline: &str) -> Result<LoadedKernel> {
+    /// Load the kernel and an optional initramfs into guest RAM, then place the
+    /// first vCPU in 64-bit mode at the kernel entry.
+    pub(crate) fn load_kernel(
+        &mut self,
+        kernel: &[u8],
+        initramfs: &[u8],
+        cmdline: &str,
+    ) -> Result<LoadedKernel> {
         let ptr = self
             .memory
             .get_host_address(GuestAddress(0))
@@ -103,7 +111,7 @@ impl KvmMachine {
         // and no vCPU has run yet, so nothing else can observe the slice. It is
         // `size` bytes, the region allocated above.
         let mem = unsafe { std::slice::from_raw_parts_mut(ptr, self.size) };
-        let loaded = boot::load_bzimage(kernel, mem, cmdline)?;
+        let loaded = boot::load_bzimage(kernel, initramfs, mem, cmdline)?;
         let vcpu = self
             .vcpus
             .first()

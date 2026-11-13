@@ -20,8 +20,8 @@ pub(crate) mod vsock;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
-use vm_memory::GuestMemoryMmap;
 use virtio_queue::QueueSync;
+use vm_memory::GuestMemoryMmap;
 
 use super::irq::Gsi;
 
@@ -213,7 +213,10 @@ mod tests {
 
     #[test]
     fn device_args_match_the_kernel_property_format() {
-        assert_eq!(mmio_device_arg(0xd000_0000, 5), "virtio_mmio.device=4K@0xd0000000:5");
+        assert_eq!(
+            mmio_device_arg(0xd000_0000, 5),
+            "virtio_mmio.device=4K@0xd0000000:5"
+        );
     }
 
     #[test]

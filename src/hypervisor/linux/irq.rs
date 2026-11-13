@@ -130,6 +130,9 @@ mod tests {
     #[test]
     fn routing_buffer_is_aligned_for_the_fam_header() {
         let buffer = routing_buffer(&[5]);
-        assert_eq!(buffer.as_ptr() as usize % std::mem::align_of::<kvm_irq_routing>(), 0);
+        assert_eq!(
+            buffer.as_ptr() as usize % std::mem::align_of::<kvm_irq_routing>(),
+            0
+        );
     }
 }

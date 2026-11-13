@@ -9,15 +9,15 @@
 //! Register offsets and bit meanings come from `virtio-bindings`, so this module
 //! only encodes the state machine, not the ABI.
 
-use vm_device::bus::MmioAddress;
-use vm_device::MutDeviceMmio;
-use vm_memory::GuestMemoryMmap;
 use virtio_bindings::bindings::virtio_config::{
     VIRTIO_CONFIG_S_ACKNOWLEDGE, VIRTIO_CONFIG_S_DRIVER, VIRTIO_CONFIG_S_DRIVER_OK,
     VIRTIO_CONFIG_S_FAILED, VIRTIO_CONFIG_S_FEATURES_OK,
 };
 use virtio_bindings::bindings::virtio_mmio::*;
 use virtio_queue::{QueueSync, QueueT};
+use vm_device::bus::MmioAddress;
+use vm_device::MutDeviceMmio;
+use vm_memory::GuestMemoryMmap;
 
 use super::{Activate, Interrupt, VirtioDevice};
 use crate::error::{Error, Result};
@@ -54,17 +54,15 @@ impl VirtioMmioTransport {
     ) -> Result<Self> {
         let count = device.queue_count();
         if count == 0 {
-            return Err(Error::Hypervisor(
-                "virtio device exposes no queues".into(),
-            ));
+            return Err(Error::Hypervisor("virtio device exposes no queues".into()));
         }
         let max = device.queue_max_size();
         let mut queues = Vec::with_capacity(count);
         for _ in 0..count {
-            queues.push(
-                QueueSync::new(max)
-                    .map_err(|err| Error::Hypervisor(format!("create virtqueue ({max}): {err}")))?,
-            );
+            queues
+                .push(QueueSync::new(max).map_err(|err| {
+                    Error::Hypervisor(format!("create virtqueue ({max}): {err}"))
+                })?);
         }
         Ok(Self {
             device,
@@ -298,11 +296,7 @@ mod tests {
         }
         fn read_config(&self, offset: u64, data: &mut [u8]) {
             for (i, byte) in data.iter_mut().enumerate() {
-                *byte = self
-                    .config
-                    .get(offset as usize + i)
-                    .copied()
-                    .unwrap_or(0);
+                *byte = self.config.get(offset as usize + i).copied().unwrap_or(0);
             }
         }
         fn queue_count(&self) -> usize {
@@ -325,7 +319,11 @@ mod tests {
         }
     }
 
-    fn transport() -> (VirtioMmioTransport, Arc<AtomicBool>, Arc<std::sync::Mutex<Vec<u16>>>) {
+    fn transport() -> (
+        VirtioMmioTransport,
+        Arc<AtomicBool>,
+        Arc<std::sync::Mutex<Vec<u16>>>,
+    ) {
         let mem: GuestMemoryMmap =
             GuestMemoryMmap::from_ranges(&[(GuestAddress(0), 0x10_000)]).unwrap();
         let activated = Arc::new(AtomicBool::new(false));
@@ -420,17 +418,16 @@ mod tests {
     #[test]
     fn rejects_unsupported_features_at_features_ok() {
         let (mut t, activated, _) = transport();
-        write(
-            &mut t,
-            VIRTIO_MMIO_DRIVER_FEATURES,
-            0xFFFF_FFFF,
-        );
+        write(&mut t, VIRTIO_MMIO_DRIVER_FEATURES, 0xFFFF_FFFF);
         write(
             &mut t,
             VIRTIO_MMIO_STATUS,
             VIRTIO_CONFIG_S_ACKNOWLEDGE | VIRTIO_CONFIG_S_DRIVER | VIRTIO_CONFIG_S_FEATURES_OK,
         );
-        assert_eq!(read(&mut t, VIRTIO_MMIO_STATUS) & VIRTIO_CONFIG_S_FAILED, VIRTIO_CONFIG_S_FAILED);
+        assert_eq!(
+            read(&mut t, VIRTIO_MMIO_STATUS) & VIRTIO_CONFIG_S_FAILED,
+            VIRTIO_CONFIG_S_FAILED
+        );
         write(&mut t, VIRTIO_MMIO_STATUS, 0xFF);
         assert!(!activated.load(Ordering::SeqCst));
     }
@@ -439,11 +436,7 @@ mod tests {
     fn routes_config_space_and_reset() {
         let (mut t, _, _) = transport();
         let mut config = [0u8; 2];
-        t.mmio_read(
-            MmioAddress(0),
-            u64::from(VIRTIO_MMIO_CONFIG),
-            &mut config,
-        );
+        t.mmio_read(MmioAddress(0), u64::from(VIRTIO_MMIO_CONFIG), &mut config);
         assert_eq!(config, [0xAA, 0xBB]);
 
         // A status write of 0 resets the device and its queues.

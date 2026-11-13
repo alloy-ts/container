@@ -43,8 +43,11 @@ pub trait Agent: Send + Sync {
     async fn health_check(&self) -> Result<HealthStatus, AgentError>;
     async fn create_container(&self, req: CreateContainerRequest) -> Result<(), AgentError>;
     async fn start_container(&self, container_id: &str) -> Result<(), AgentError>;
-    async fn remove_container(&self, container_id: &str, timeout_secs: u32)
-        -> Result<(), AgentError>;
+    async fn remove_container(
+        &self,
+        container_id: &str,
+        timeout_secs: u32,
+    ) -> Result<(), AgentError>;
     async fn pause_container(&self, container_id: &str) -> Result<(), AgentError>;
     async fn resume_container(&self, container_id: &str) -> Result<(), AgentError>;
 
@@ -166,7 +169,11 @@ impl GuestAgent {
         if lock(&self.inner.connected).is_none() {
             return Err(AgentError::NotConnected);
         }
-        self.inner.connector.connect(port).await.map_err(AgentError::Io)
+        self.inner
+            .connector
+            .connect(port)
+            .await
+            .map_err(AgentError::Io)
     }
 
     fn timed_service(&self) -> Result<AgentService, AgentError> {
@@ -423,7 +430,10 @@ impl Agent for GuestAgent {
             .await?,
         )? {
             RpcResponse::Stats(stats) => Ok(stats),
-            other => Err(AgentError::unexpected(reply_name(&other), "stats_container")),
+            other => Err(AgentError::unexpected(
+                reply_name(&other),
+                "stats_container",
+            )),
         }
     }
 
@@ -464,9 +474,7 @@ impl Agent for GuestAgent {
 
 #[cfg(test)]
 mod tests {
-    use super::super::transport::test_support::{
-        jitter, spawn_mock_server, tag, OneShotConnector,
-    };
+    use super::super::transport::test_support::{jitter, spawn_mock_server, tag, OneShotConnector};
     use super::*;
     use tokio::task::JoinHandle;
 
@@ -480,7 +488,10 @@ mod tests {
         let server_task = spawn_mock_server(server, handler);
         let connector = Arc::new(OneShotConnector::new(1024, client));
         let agent = GuestAgent::new(tune(AgentConfig::new(1024)), connector);
-        agent.connect().await.expect("mock guest should accept the dial");
+        agent
+            .connect()
+            .await
+            .expect("mock guest should accept the dial");
         (agent, server_task)
     }
 
@@ -576,7 +587,10 @@ mod tests {
             .stats_container("ctr")
             .await
             .expect_err("stalled reply must time out");
-        assert!(matches!(err, AgentError::Timeout), "expected Timeout, got {err:?}");
+        assert!(
+            matches!(err, AgentError::Timeout),
+            "expected Timeout, got {err:?}"
+        );
 
         agent.disconnect().unwrap();
         let _ = server_task.await;

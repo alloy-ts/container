@@ -1,9 +1,9 @@
 //! AF_VSOCK helpers for the host side of the guest agent connection.
 //!
-//! Binding `VMADDR_CID_ANY` works on this host. Connecting to a guest CID
-//! requires a virtio-vsock device inside the VM, which is not attached yet
-//! (see the Linux hypervisor TODO). The connect path is still real: nonblocking
-//! `connect` plus `poll`.
+//! Binding `VMADDR_CID_ANY` works on this host. `connect_blocking` is the guest
+//! init's path to the host agent: `AF_VSOCK` to `VMADDR_CID_HOST`, which the
+//! host's virtio-vsock device bridges to the per-VM proxy socket. The connect is
+//! nonblocking `connect` plus `poll`.
 
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
@@ -99,7 +99,8 @@ impl VsockListener {
     }
 }
 
-/// Connect to `cid:port`. Used once a guest virtio-vsock device exists.
+/// Connect to `cid:port`. The guest init uses this with `VMADDR_CID_HOST` to
+/// reach the host agent.
 #[allow(dead_code)]
 pub(crate) fn connect_blocking(cid: u32, port: u32, timeout: Duration) -> Result<VsockStream> {
     let fd = vsock_socket()?;
@@ -197,8 +198,7 @@ fn tokio_fd(fd: OwnedFd) -> Result<tokio::io::unix::AsyncFd<OwnedFd>> {
     tokio::io::unix::AsyncFd::new(fd).map_err(Error::Io)
 }
 
-/// Nonblocking AF_VSOCK stream. `connect_blocking` returns one; nothing in
-/// `boot` connects yet, so the type is ready for the virtio-vsock TODO.
+/// Nonblocking AF_VSOCK stream returned by `connect_blocking`.
 #[allow(dead_code)]
 pub(crate) struct VsockStream {
     fd: tokio::io::unix::AsyncFd<OwnedFd>,

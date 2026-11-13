@@ -401,10 +401,10 @@ fn vm_config(opts: &ContainerOpts, resources: &ResourceManager) -> VmConfig {
         vcpus: opts.vcpus,
         memory_mb: opts.memory_mb,
         kernel_path: opts.kernel_path.clone(),
-        cmdline: format!(
-            "console=ttyS0 reboot=k panic=1 pci=off rw rootfstype=virtiofs virtiofs.tag=rootfs root={}",
-            resources.rootfs.path.display()
-        ),
+        initramfs_path: opts.initramfs_path.clone(),
+        cmdline:
+            "console=ttyS0 reboot=k panic=1 pci=off rw rootfstype=virtiofs root=rootfs init=/init"
+                .to_string(),
         vsock_cid: hypervisor::alloc_guest_cid(),
         vsock_port: hypervisor::GUEST_AGENT_PORT,
         network: resources.network.clone(),
@@ -490,6 +490,8 @@ pub struct JsContainerOpts {
     pub id: String,
     pub rootfs: JsRootfs,
     pub kernel_path: String,
+    /// Optional initramfs/initrd image path.
+    pub initramfs_path: Option<String>,
     pub vcpus: Option<u32>,
     pub memory_mb: Option<u32>,
     pub args: Option<Vec<String>>,
@@ -593,6 +595,9 @@ fn js_opts(opts: JsContainerOpts) -> Result<ContainerOpts> {
         .args(opts.args.unwrap_or_default())
         .working_dir(opts.working_dir.unwrap_or_else(|| "/".into()))
         .network(network);
+    if let Some(initramfs) = opts.initramfs_path {
+        builder = builder.initramfs_path(initramfs);
+    }
     if let Some(tty) = opts.tty {
         builder = builder.tty(tty);
     }
@@ -671,6 +676,10 @@ pub fn container_opts_from_oci_bundle(bundle_path: String) -> napi::Result<JsCon
             path: opts.rootfs.path().display().to_string(),
         },
         kernel_path: opts.kernel_path.display().to_string(),
+        initramfs_path: opts
+            .initramfs_path
+            .as_ref()
+            .map(|p| p.display().to_string()),
         vcpus: Some(opts.vcpus),
         memory_mb: Some(u32::try_from(opts.memory_mb).unwrap_or(u32::MAX)),
         args: Some(opts.args),

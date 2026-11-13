@@ -32,7 +32,17 @@ pub(crate) fn validate_header(kernel: &[u8]) -> Result<()> {
     parse_header(kernel).map(|_| ())
 }
 
-pub(crate) fn load_bzimage(kernel: &[u8], mem: &mut [u8], cmdline: &str) -> Result<LoadedKernel> {
+/// Load a 64-bit bzImage (and an optional initramfs) into guest RAM.
+///
+/// The initramfs is copied to the first page-aligned address after the kernel
+/// payload and advertised through `boot_params.ramdisk_image`/`ramdisk_size`,
+/// which is how the kernel finds `/init` before it has a root filesystem.
+pub(crate) fn load_bzimage(
+    kernel: &[u8],
+    initramfs: &[u8],
+    mem: &mut [u8],
+    cmdline: &str,
+) -> Result<LoadedKernel> {
     let header = parse_header(kernel)?;
     let payload = &kernel[header.setup_size..];
     let load_end = KERNEL_LOAD as usize + payload.len();
@@ -45,7 +55,12 @@ pub(crate) fn load_bzimage(kernel: &[u8], mem: &mut [u8], cmdline: &str) -> Resu
     }
     mem[KERNEL_LOAD as usize..load_end].copy_from_slice(payload);
 
-    write_boot_params(mem, kernel, cmdline)?;
+    // The page tables live at the top of RAM, so the initramfs must end below
+    // them. Compute the boundary before either is written.
+    let tables_top = mem.len() as u64 - page_table_bytes(mem.len() as u64);
+    let ramdisk = place_initramfs(mem, initramfs, load_end as u64, tables_top)?;
+
+    write_boot_params(mem, kernel, cmdline, ramdisk)?;
     write_gdt(mem)?;
     let pml4 = install_page_tables(mem)?;
     Ok(LoadedKernel {
@@ -54,6 +69,37 @@ pub(crate) fn load_bzimage(kernel: &[u8], mem: &mut [u8], cmdline: &str) -> Resu
         pml4,
         protocol: header.protocol,
     })
+}
+
+/// Copy `initramfs` to the first page-aligned address at or after `after`.
+/// Returns the `(address, size)` the kernel should be told about, or `None`
+/// when there is no initramfs.
+fn place_initramfs(
+    mem: &mut [u8],
+    initramfs: &[u8],
+    after: u64,
+    top: u64,
+) -> Result<Option<(u64, usize)>> {
+    if initramfs.is_empty() {
+        return Ok(None);
+    }
+    let at = (after + PAGE - 1) & !(PAGE - 1);
+    let end = at
+        .checked_add(initramfs.len() as u64)
+        .ok_or_else(|| Error::Hypervisor("initramfs size overflow".into()))?;
+    if end > top {
+        return Err(Error::Hypervisor(format!(
+            "initramfs ({} bytes at 0x{at:x}) does not fit below the page tables at 0x{top:x}",
+            initramfs.len()
+        )));
+    }
+    if end > u32::MAX as u64 {
+        return Err(Error::Hypervisor(
+            "initramfs must be loaded below 4 GiB (high ramdisk fields are not written)".into(),
+        ));
+    }
+    mem[at as usize..end as usize].copy_from_slice(initramfs);
+    Ok(Some((at, initramfs.len())))
 }
 
 struct Header {
@@ -109,7 +155,12 @@ fn parse_header(kernel: &[u8]) -> Result<Header> {
     })
 }
 
-fn write_boot_params(mem: &mut [u8], kernel: &[u8], cmdline: &str) -> Result<()> {
+fn write_boot_params(
+    mem: &mut [u8],
+    kernel: &[u8],
+    cmdline: &str,
+    ramdisk: Option<(u64, usize)>,
+) -> Result<()> {
     let params = BOOT_PARAMS as usize;
     if params + 4096 > mem.len() {
         return Err(Error::Hypervisor(
@@ -135,6 +186,13 @@ fn write_boot_params(mem: &mut [u8], kernel: &[u8], cmdline: &str) -> Result<()>
     mem[params + 0x228..params + 0x22C].copy_from_slice(&(CMDLINE_ADDR as u32).to_le_bytes());
     mem[params + 0x238..params + 0x23C]
         .copy_from_slice(&(cmdline_bytes.len() as u32).to_le_bytes());
+
+    // ramdisk_image (0x218) / ramdisk_size (0x21C). Both 32-bit; the loader
+    // keeps the initramfs below 4 GiB so the extended fields are unnecessary.
+    if let Some((addr, size)) = ramdisk {
+        mem[params + 0x218..params + 0x21C].copy_from_slice(&(addr as u32).to_le_bytes());
+        mem[params + 0x21C..params + 0x220].copy_from_slice(&(size as u32).to_le_bytes());
+    }
 
     // One e820 RAM entry covering the guest allocation.
     mem[params + 0x1E8] = 1;
@@ -174,12 +232,20 @@ fn gdt_entry(limit: u32, base: u32, access: u8, flags: u8) -> u64 {
     desc
 }
 
+/// Bytes the identity-map page tables occupy at the top of RAM: a PML4, a
+/// PDPT, and one 2MiB-page PD per 1GiB of `mem_size`.
+fn page_table_bytes(mem_size: u64) -> u64 {
+    let pages = mem_size.div_ceil(PAGE_2M);
+    let pd_count = pages.div_ceil(512).max(1);
+    (2 + pd_count) * PAGE
+}
+
 /// Identity-map `mem` with 2MiB pages. Returns the physical address of the PML4.
 pub(crate) fn install_page_tables(mem: &mut [u8]) -> Result<u64> {
     let mem_size = mem.len() as u64;
-    let pages = (mem_size + PAGE_2M - 1) / PAGE_2M;
-    let pd_count = ((pages + 511) / 512).max(1);
-    let table_bytes = (2 + pd_count) * PAGE;
+    let pages = mem_size.div_ceil(PAGE_2M);
+    let pd_count = pages.div_ceil(512).max(1);
+    let table_bytes = page_table_bytes(mem_size);
     if mem_size < table_bytes + KERNEL_LOAD {
         return Err(Error::Hypervisor(
             "guest RAM is too small for page tables and the kernel".into(),
@@ -241,7 +307,7 @@ mod tests {
         let code = b"\x90\xf4"; // nop; hlt
         let image = synthesize_bzimage(code);
         let mut mem = vec![0u8; 8 * 1024 * 1024];
-        let loaded = load_bzimage(&image, &mut mem, "console=ttyS0").unwrap();
+        let loaded = load_bzimage(&image, &[], &mut mem, "console=ttyS0").unwrap();
         assert_eq!(loaded.entry, KERNEL_LOAD + 0x200);
         assert_eq!(loaded.boot_params, BOOT_PARAMS);
         assert_eq!(loaded.protocol, 0x020C);
@@ -256,6 +322,41 @@ mod tests {
         assert_eq!(entry & PTE_PRESENT, PTE_PRESENT);
         assert!(mem[BOOT_PARAMS as usize + 0x202..BOOT_PARAMS as usize + 0x206] == *b"HdrS");
         assert!(mem[CMDLINE_ADDR as usize..].starts_with(b"console=ttyS0\0"));
+        // Without an initramfs the ramdisk fields stay zero.
+        assert_eq!(
+            &mem[BOOT_PARAMS as usize + 0x218..BOOT_PARAMS as usize + 0x220],
+            &[0u8; 8]
+        );
+    }
+
+    #[test]
+    fn loads_an_initramfs_above_the_kernel() {
+        let code = b"\x90\xf4";
+        let image = synthesize_bzimage(code);
+        let initramfs = vec![0x42u8; 3000];
+        let mut mem = vec![0u8; 8 * 1024 * 1024];
+        let loaded = load_bzimage(&image, &initramfs, &mut mem, "console=ttyS0").unwrap();
+        assert_eq!(loaded.boot_params, BOOT_PARAMS);
+
+        let at = BOOT_PARAMS as usize;
+        let addr = u32::from_le_bytes(mem[at + 0x218..at + 0x21C].try_into().unwrap()) as usize;
+        let size = u32::from_le_bytes(mem[at + 0x21C..at + 0x220].try_into().unwrap()) as usize;
+        assert_eq!(size, initramfs.len());
+        assert_eq!(addr % PAGE as usize, 0, "initramfs must be page aligned");
+        // Placed after the kernel payload and before the page tables.
+        let kernel_end = KERNEL_LOAD + 5 * 512 + code.len() as u64;
+        assert!(addr as u64 >= kernel_end);
+        assert!(addr as u64 + size as u64 <= mem.len() as u64);
+        assert_eq!(&mem[addr..addr + size], &initramfs[..]);
+    }
+
+    #[test]
+    fn rejects_an_initramfs_that_does_not_fit() {
+        let image = synthesize_bzimage(b"\x90\xf4");
+        let mut mem = vec![0u8; 8 * 1024 * 1024];
+        let huge = vec![0u8; mem.len()];
+        let err = load_bzimage(&image, &huge, &mut mem, "console=ttyS0").unwrap_err();
+        assert!(err.to_string().contains("initramfs"), "{err}");
     }
 
     #[test]

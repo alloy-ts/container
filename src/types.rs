@@ -107,6 +107,9 @@ pub struct ContainerOpts {
     pub id: String,
     pub rootfs: RootfsSource,
     pub kernel_path: PathBuf,
+    /// Optional initramfs/initrd image. It carries the guest `/init` for a full
+    /// boot; when `None` the kernel runs with only its built-in initramfs.
+    pub initramfs_path: Option<PathBuf>,
     pub vcpus: u32,
     pub memory_mb: u64,
     pub args: Vec<String>,
@@ -233,6 +236,10 @@ impl ContainerOpts {
             .or_else(|| annotations.get("io.container.kernel"))
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("/var/lib/container-native/vmlinux"));
+        let initramfs_path = annotations
+            .get("org.container.initramfs")
+            .or_else(|| annotations.get("io.container.initramfs"))
+            .map(PathBuf::from);
 
         let mut vcpus = annotations
             .get("org.container.vcpus")
@@ -273,6 +280,7 @@ impl ContainerOpts {
             id,
             rootfs,
             kernel_path,
+            initramfs_path,
             vcpus,
             memory_mb,
             args,
@@ -303,6 +311,7 @@ impl ContainerOptsBuilder {
                 id: id.into(),
                 rootfs: RootfsSource::Directory(PathBuf::new()),
                 kernel_path: PathBuf::from("/var/lib/container-native/vmlinux"),
+                initramfs_path: None,
                 vcpus: 1,
                 memory_mb: 512,
                 args: Vec::new(),
@@ -332,6 +341,11 @@ impl ContainerOptsBuilder {
 
     pub fn kernel_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.inner.kernel_path = path.into();
+        self
+    }
+
+    pub fn initramfs_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.inner.initramfs_path = Some(path.into());
         self
     }
 
