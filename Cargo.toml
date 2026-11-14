@@ -2,21 +2,36 @@
 name = "container-native"
 version = "0.1.0"
 edition = "2021"
+description = "In-process OCI microVM container runtime (one container = one microVM)"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-napi = { version = "3", features = ["serde-json"] }
+async-trait = "0.1"
+base64 = "0.22"
+libc = "0.2"
+napi = { version = "3", features = ["async", "serde-json", "tokio_rt"] }
 napi-derive = "3"
-oxc = "0.152.0"
-oxc_allocator = "0.152.0"
-oxc_ast = { version = "0.152.0", features = ["serialize"] }
-oxc_estree = { version = "0.152.0", features = ["serialize"] }
-oxc_parser = "0.152.0"
-oxc_span = "0.152.0"
-rocket = "0.5.1"
-serde_json = "1.0.154"
+oci-spec = { version = "0.6.8", features = ["runtime"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tokio = { version = "1", features = [
+  "fs",
+  "io-util",
+  "macros",
+  "net",
+  "process",
+  "rt-multi-thread",
+  "sync",
+  "time",
+] }
+
+# libkrun is the VMM (compiled into this crate). It loads libkrunfw at runtime
+# for the guest kernel. There is no Windows build of libkrun.
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+libkrun = { version = "1.19.8", features = ["net", "blk"] }
 
 [build-dependencies]
 napi-build = "2"

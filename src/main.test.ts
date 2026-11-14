@@ -1,6 +1,8 @@
 import { expect, test } from "vite-plus/test";
-import { add } from "./main.ts";
+import { Container, containerOptsFromOciBundle } from "./main.ts";
 
-test("add() returns the sum of two integers (NAPI round-trip)", () => {
-  expect(add(1, 2)).toBe(3);
+test("the native module exports Container and the OCI bundle loader", () => {
+  expect(typeof Container).toBe("function");
+  expect(typeof containerOptsFromOciBundle).toBe("function");
+  expect(typeof Container.create).toBe("function");
 });

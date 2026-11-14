@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # libkrun (the VMM) is a Cargo dependency and is compiled in.
+      # libkrunfw is a runtime dlopen of the guest kernel. CI does not install
+      # it; boot tests accept the resulting libkrun error. A Mac mini build
+      # needs `brew install libkrunfw` and the hypervisor entitlement.
+      - run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config
+      - run: cargo test
+      - run: cargo build
+      - run: npm ci
+      - run: npm run build:napi
+      - run: npm test
