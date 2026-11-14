@@ -1,13 +1,5 @@
-//! Windows backend: WHPX (via the Windows Hypervisor Platform) + HNS/slirp
-//! + AF_HYPERV sockets.
-//!
-//! TODO(windows): this is a compiling stub. The intended path is:
-//!   * `WHvCreatePartition` / `WHvCreateVirtualProcessor` for the microVM
-//!   * virtio devices backed by Cloud Hypervisor's Windows device model, or
-//!     a small in-tree virtio implementation
-//!   * HNS or slirp for the dedicated container IP
-//!   * an AF_HYPERV socket (or a named pipe) for the guest agent
-//! None of those APIs are available when this crate is built on Linux.
+//! Windows has no libkrun port (libkrun is KVM on Linux and Hypervisor.framework
+//! on macOS). This stub keeps the crate building until a Windows VMM exists.
 
 use async_trait::async_trait;
 

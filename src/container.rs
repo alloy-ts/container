@@ -33,9 +33,15 @@ struct Inner {
     status: ContainerStatus,
     hypervisor: Option<Box<dyn Hypervisor>>,
     resources: ResourceManager,
-    agent: AgentClient,
+    agent: Option<AgentClient>,
     primary_pid: Option<u32>,
     primary_exit: Option<ExitWait>,
+    /// Console pipes for a libkrun guest that has no in-guest agent.
+    direct_io: Option<(
+        Option<Box<dyn AsyncRead + Unpin + Send>>,
+        Option<Box<dyn AsyncRead + Unpin + Send>>,
+        ExitWait,
+    )>,
     host_pid: Option<u32>,
     oci_version: String,
     cleaned: bool,
@@ -72,18 +78,28 @@ impl Container {
                 return Err(err);
             }
         };
-        let agent = match connect_link(booted.link).await {
-            Ok(agent) => agent,
-            Err(err) => {
-                hypervisor.shutdown().await.ok();
-                return Err(err);
+        let (agent, direct_exit, direct_io) = match booted.link {
+            AgentLink::Connected(stream) => {
+                let agent = match connect_link(stream).await {
+                    Ok(agent) => agent,
+                    Err(err) => {
+                        hypervisor.shutdown().await.ok();
+                        return Err(err);
+                    }
+                };
+                if let Err(err) = agent.prepare(&opts).await {
+                    let _ = agent.delete().await;
+                    hypervisor.shutdown().await.ok();
+                    return Err(err);
+                }
+                (Some(agent), None, None)
             }
+            AgentLink::Direct {
+                stdout,
+                stderr,
+                exit,
+            } => (None, Some(exit.clone()), Some((stdout, stderr, exit))),
         };
-        if let Err(err) = agent.prepare(&opts).await {
-            let _ = agent.delete().await;
-            hypervisor.shutdown().await.ok();
-            return Err(err);
-        }
 
         Ok(Self {
             id,
@@ -95,8 +111,9 @@ impl Container {
                 hypervisor: Some(hypervisor),
                 resources,
                 agent,
-                primary_pid: None,
-                primary_exit: None,
+                primary_pid: direct_exit.as_ref().map(|_| 1),
+                primary_exit: direct_exit,
+                direct_io,
                 host_pid: booted.host_pid,
                 oci_version,
                 cleaned: false,
@@ -114,15 +131,29 @@ impl Container {
 
     /// Run the container entrypoint. The container moves from `created` to `running`.
     pub async fn start(&mut self) -> Result<Process> {
-        let (agent, opts) = {
-            let inner = lock(&self.inner)?;
+        let direct = {
+            let mut inner = lock(&self.inner)?;
             if inner.status != ContainerStatus::Created {
                 return Err(Error::InvalidState {
                     from: inner.status,
                     op: "start",
                 });
             }
-            (inner.agent.clone(), inner.opts.clone())
+            inner.direct_io.take()
+        };
+        if let Some((stdout, stderr, exit)) = direct {
+            let mut inner = lock(&self.inner)?;
+            inner.status = ContainerStatus::Running;
+            inner.primary_pid = Some(1);
+            inner.primary_exit = Some(exit.clone());
+            return Ok(Process::direct(1, stdout, stderr, exit));
+        }
+        let (agent, opts) = {
+            let inner = lock(&self.inner)?;
+            let agent = inner.agent.clone().ok_or_else(|| {
+                Error::Hypervisor("container has no guest agent".into())
+            })?;
+            (agent, inner.opts.clone())
         };
         let io = agent.start(&opts).await?;
         let mut inner = lock(&self.inner)?;
@@ -137,6 +168,7 @@ impl Container {
             let inner = lock(&self.inner)?;
             inner.agent.clone()
         };
+        if let Some(agent) = agent {
         if let Ok((status, pid)) = agent.state().await {
             let mut inner = lock(&self.inner)?;
             if status == ContainerStatus::Stopped
@@ -152,6 +184,7 @@ impl Container {
                 snapshot.pid = pid;
             }
             return Ok(snapshot);
+        }
         }
         let inner = lock(&self.inner)?;
         Ok(self.snapshot(&inner))
@@ -173,7 +206,13 @@ impl Container {
                     op: "kill",
                 });
             };
-            (inner.agent.clone(), pid)
+            let agent = inner.agent.clone().ok_or_else(|| {
+                Error::Hypervisor(
+                    "libkrun does not forward signals into the guest; delete the container to stop the microVM"
+                        .into(),
+                )
+            })?;
+            (agent, pid)
         };
         agent.kill(pid, signal).await
     }
@@ -198,7 +237,9 @@ impl Container {
         };
         // `resources` above is the real plan; the placeholder exists only so
         // the field stays inhabited for Drop. Release the real plan below.
-        let _ = agent.delete().await;
+        if let Some(agent) = agent {
+            let _ = agent.delete().await;
+        }
         let hv_result = match hypervisor {
             Some(mut hv) => hv.shutdown().await,
             None => Ok(()),
@@ -221,7 +262,11 @@ impl Container {
                     op: "exec",
                 });
             }
-            inner.agent.clone()
+            inner.agent.clone().ok_or_else(|| {
+                Error::Hypervisor(
+                    "libkrun runs a single entrypoint; exec needs the in-guest agent".into(),
+                )
+            })?
         };
         let tty = opts.tty;
         let io = agent.exec(&opts).await?;
@@ -251,7 +296,11 @@ impl Container {
     pub async fn logs(&self) -> Result<LogStream> {
         let agent = {
             let inner = lock(&self.inner)?;
-            inner.agent.clone()
+            inner.agent.clone().ok_or_else(|| {
+                Error::Hypervisor(
+                    "libkrun does not expose a log buffer; read the process console instead".into(),
+                )
+            })?
         };
         let (stdout, stderr) = agent.logs().await?;
         Ok(LogStream {
@@ -263,7 +312,11 @@ impl Container {
     pub async fn stats(&self) -> Result<ContainerStats> {
         let agent = {
             let inner = lock(&self.inner)?;
-            inner.agent.clone()
+            inner.agent.clone().ok_or_else(|| {
+                Error::Hypervisor(
+                    "libkrun does not expose guest cgroup stats through this API".into(),
+                )
+            })?
         };
         agent.stats().await
     }
@@ -340,7 +393,7 @@ pub struct Process {
     pub stdout: Option<Box<dyn AsyncRead + Unpin + Send>>,
     pub stderr: Option<Box<dyn AsyncRead + Unpin + Send>>,
     exit: ExitWait,
-    agent: AgentClient,
+    agent: Option<AgentClient>,
     tty: bool,
 }
 
@@ -352,8 +405,25 @@ impl Process {
             stdout: io.stdout,
             stderr: io.stderr,
             exit: io.exit,
-            agent,
+            agent: Some(agent),
             tty,
+        }
+    }
+
+    fn direct(
+        pid: u32,
+        stdout: Option<Box<dyn AsyncRead + Unpin + Send>>,
+        stderr: Option<Box<dyn AsyncRead + Unpin + Send>>,
+        exit: ExitWait,
+    ) -> Self {
+        Self {
+            pid,
+            stdin: None,
+            stdout,
+            stderr,
+            exit,
+            agent: None,
+            tty: false,
         }
     }
 
@@ -362,7 +432,13 @@ impl Process {
     }
 
     pub async fn kill(&self, signal: Signal) -> Result<()> {
-        self.agent.kill(self.pid, signal).await
+        let Some(agent) = &self.agent else {
+            return Err(Error::Hypervisor(
+                "libkrun does not forward signals into the guest; delete the container to stop the microVM"
+                    .into(),
+            ));
+        };
+        agent.kill(self.pid, signal).await
     }
 
     pub async fn resize_tty(&self, rows: u16, cols: u16) -> Result<()> {
@@ -371,7 +447,12 @@ impl Process {
                 "process has no tty; resize_tty requires a tty process".into(),
             ));
         }
-        self.agent.resize(self.pid, rows, cols).await
+        let Some(agent) = &self.agent else {
+            return Err(Error::Agent(
+                "process has no tty; resize_tty requires a tty process".into(),
+            ));
+        };
+        agent.resize(self.pid, rows, cols).await
     }
 }
 
@@ -395,35 +476,22 @@ fn vm_config(opts: &ContainerOpts, resources: &ResourceManager) -> VmConfig {
         vsock_port: hypervisor::GUEST_AGENT_PORT,
         network: resources.network.clone(),
         shares: resources.shares.clone(),
+        ports: opts
+            .network
+            .ports
+            .iter()
+            .map(|port| (port.host, port.guest))
+            .collect(),
+        args: opts.args.clone(),
+        env: opts.env.clone(),
+        workdir: opts.working_dir.clone(),
     }
 }
 
-async fn connect_link(link: AgentLink) -> Result<AgentClient> {
-    match link {
-        AgentLink::Connected(stream) => AgentClient::connect_stream(stream).await,
-        AgentLink::Vsock { cid, port } => {
-            #[cfg(target_os = "linux")]
-            {
-                let stream = tokio::task::spawn_blocking(move || {
-                    crate::hypervisor::linux::vsock::connect_blocking(
-                        cid,
-                        port,
-                        std::time::Duration::from_secs(2),
-                    )
-                })
-                .await
-                .map_err(|err| Error::Hypervisor(format!("vsock connect task: {err}")))??;
-                AgentClient::connect_stream(stream).await
-            }
-            #[cfg(not(target_os = "linux"))]
-            {
-                let _ = (cid, port);
-                Err(Error::Hypervisor(
-                    "TODO: vsock connect is only implemented on Linux".into(),
-                ))
-            }
-        }
-    }
+async fn connect_link(
+    stream: Box<dyn crate::hypervisor::BytePipe>,
+) -> Result<AgentClient> {
+    AgentClient::connect_stream(stream).await
 }
 
 /// Used only to keep `Inner.resources` inhabited after `delete` moves the real
@@ -462,6 +530,12 @@ pub struct JsMount {
     pub options: Option<Vec<String>>,
 }
 
+#[napi(object, js_name = "PublishedPort")]
+pub struct JsPublishedPort {
+    pub host: u16,
+    pub guest: u16,
+}
+
 #[napi(object, js_name = "NetworkConfig")]
 pub struct JsNetwork {
     /// `dedicated` (default), `none`, or `slirp`.
@@ -469,6 +543,8 @@ pub struct JsNetwork {
     pub guest_ip: Option<String>,
     pub gateway: Option<String>,
     pub mac: Option<String>,
+    /// Host-to-guest TCP forwards, e.g. `{ host: 8080, guest: 3000 }`.
+    pub ports: Option<Vec<JsPublishedPort>>,
 }
 
 #[napi(object, js_name = "ContainerOpts")]
@@ -563,6 +639,19 @@ fn js_opts(opts: JsContainerOpts) -> Result<ContainerOpts> {
             );
         }
         network.mac = js.mac;
+        if let Some(ports) = js.ports {
+            for port in ports {
+                if port.host == 0 || port.guest == 0 {
+                    return Err(Error::InvalidOpts(
+                        "published ports must be non-zero".into(),
+                    ));
+                }
+                network.ports.push(crate::types::PublishedPort {
+                    host: port.host,
+                    guest: port.guest,
+                });
+            }
+        }
     }
     let mut builder = ContainerOpts::builder(opts.id)
         .rootfs(rootfs)
@@ -665,6 +754,16 @@ pub fn container_opts_from_oci_bundle(bundle_path: String) -> napi::Result<JsCon
             guest_ip: opts.network.guest_ip.map(|ip| ip.to_string()),
             gateway: opts.network.gateway.map(|ip| ip.to_string()),
             mac: opts.network.mac,
+            ports: Some(
+                opts.network
+                    .ports
+                    .iter()
+                    .map(|port| JsPublishedPort {
+                        host: port.host,
+                        guest: port.guest,
+                    })
+                    .collect(),
+            ),
         }),
         tty: Some(opts.tty),
     })
@@ -828,7 +927,7 @@ fn deleted() -> napi::Error {
 #[napi(js_name = "Process")]
 pub struct JsProcess {
     pid: u32,
-    agent: AgentClient,
+    agent: Option<AgentClient>,
     exit: tokio::sync::Mutex<ExitWait>,
     tty: bool,
     stdin: tokio::sync::Mutex<Option<Box<dyn AsyncWrite + Unpin + Send>>>,
@@ -865,7 +964,13 @@ impl JsProcess {
 
     #[napi]
     pub async fn kill(&self, signal: i32) -> napi::Result<()> {
-        self.agent
+        let Some(agent) = &self.agent else {
+            return Err(to_napi(Error::Hypervisor(
+                "libkrun does not forward signals into the guest; delete the container to stop the microVM"
+                    .into(),
+            )));
+        };
+        agent
             .kill(self.pid, Signal::from_raw(signal))
             .await
             .map_err(to_napi)
@@ -878,7 +983,12 @@ impl JsProcess {
                 "process has no tty; resize_tty requires a tty process".into(),
             )));
         }
-        self.agent
+        let Some(agent) = &self.agent else {
+            return Err(to_napi(Error::Agent(
+                "process has no tty; resize_tty requires a tty process".into(),
+            )));
+        };
+        agent
             .resize(self.pid, rows as u16, cols as u16)
             .await
             .map_err(to_napi)

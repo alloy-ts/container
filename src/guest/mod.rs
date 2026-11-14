@@ -42,6 +42,11 @@ pub(crate) struct ExitWait {
 }
 
 impl ExitWait {
+    pub(crate) fn channel() -> (watch::Sender<Option<ExitStatus>>, Self) {
+        let (tx, rx) = watch::channel(None);
+        (tx, Self { rx })
+    }
+
     pub(crate) async fn wait(&mut self) -> Result<ExitStatus> {
         loop {
             if let Some(status) = *self.rx.borrow() {

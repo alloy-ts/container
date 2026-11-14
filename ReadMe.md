@@ -51,19 +51,116 @@ src/
   lib.rs            public exports
   container.rs      Container, Process, and the NAPI class
   proto/            length-prefixed vsock RPC and stdio frames
-  hypervisor/       VMM trait
-    linux/          KVM, bzImage boot, TAP, AF_VSOCK (x86_64)
-    macos/          stub: Virtualization.framework + vmnet + VZVirtioSocket
-    windows/        stub: WHPX + HNS/slirp + AF_HYPERV
+  hypervisor/       VMM trait; libkrun on Linux and macOS, stub on Windows
   resource/         per-VM IP plan and virtio-fs share list
   guest/            host agent client and the reference guest init
 ```
 
-## What runs today
+## Hypervisor
 
-The guest-agent protocol (create, start, exec, stdio, signals, tty resize, stats, logs, delete) is implemented and tested. The reference guest init is the PID 1 this protocol expects; tests run it in-process so the public lifecycle does not need `/dev/kvm`.
+Linux (KVM) and macOS (Hypervisor.framework, including Apple Silicon) boot through the [`libkrun`](https://crates.io/crates/libkrun) crate. That crate is the VMM: Cargo compiles it into this package. Nothing links a system `libkrun.so` / `libkrun.dylib`.
 
-On Linux x86_64 the hypervisor really opens `/dev/kvm`, maps guest RAM, creates vCPUs, loads a bzImage, builds a long-mode identity map, and can open a TAP device and an AF_VSOCK port. virtio-fs, virtio-net, and virtio-vsock device emulation are not done, so `Container::create` on the real backend rolls the machine back with an explicit error instead of returning a VM the agent can never reach. macOS and Windows backends compile and return the same kind of error. The Linux path is the one implemented here because this crate is built on Linux x86_64, where KVM, TAP, and AF_VSOCK exist; Virtualization.framework and WHPX do not.
+The guest kernel is [libkrunfw](https://github.com/containers/libkrunfw), loaded at runtime:
+
+| Host | Library libkrun dlopens |
+| --- | --- |
+| Linux | `libkrunfw.so.5` |
+| macOS | `libkrunfw.5.dylib` |
+
+`kernelPath` stays on the options object for callers that already set it. This backend does not boot that file; libkrunfw is the kernel.
+
+Windows has no libkrun port. `Container.create` there returns a hypervisor error.
+
+### Published ports (Mac mini / Node)
+
+libkrun's TSI port map is how a process inside the guest is reached from the host. A Node 24 server listening on 3000, published on 8080:
+
+```ts
+const container = await Container.create({
+  id: "node",
+  rootfs: { kind: "directory", path: "/opt/node-root" },
+  kernelPath: "/var/lib/container-native/vmlinux",
+  vcpus: 2,
+  memoryMb: 2048,
+  args: ["/usr/local/bin/node", "server.js"],
+  workingDir: "/app",
+  network: {
+    mode: "dedicated",
+    ports: [{ host: 8080, guest: 3000 }],
+  },
+});
+```
+
+On an 8 GB Apple Silicon machine, keep `memoryMb` at or below 2048 so the host and virtio-fs window still fit. Published ports use the host network stack. libkrun cannot combine them with a dedicated TAP device; when `ports` is non-empty the guest does not get its own NIC.
+
+`create` asks libkrun to boot libkrunfw and run `args` via libkrun's init. `start` returns a `Process` whose stdout/stderr are the virtio console. A second `exec` needs an in-guest agent, which this kernel does not start, so `exec` fails for that container. `delete` drops the microVM.
+
+### macOS build
+
+```bash
+brew install libkrunfw
+cargo build
+# The .node (or the binary that loads it) must be allowed to call Hypervisor.framework.
+codesign --sign - --entitlements entitlements.plist --force \
+  dist/container.darwin-arm64.node
+```
+
+`entitlements.plist` grants `com.apple.security.hypervisor`. Without that signature a Mac mini refuses the VM.
+
+### Linux build
+
+```bash
+sudo apt-get install build-essential pkg-config
+# Prebuilt guest kernel (soname libkrunfw.so.5). Point the dynamic loader at it.
+curl -fsSL -L -o /tmp/libkrunfw-x86_64.tgz \
+  https://github.com/containers/libkrunfw/releases/download/v5.6.4/libkrunfw-x86_64.tgz
+sudo mkdir -p /opt/libkrunfw && sudo tar -C /opt/libkrunfw -xzf /tmp/libkrunfw-x86_64.tgz
+cargo build --example krun_boot
+# /dev/kvm is usually root:kvm. This VM needed sudo.
+sudo LD_LIBRARY_PATH=/opt/libkrunfw/lib/x86_64-linux-gnu \
+  ./target/debug/examples/krun_boot /path/to/alpine-minirootfs
+```
+
+A dedicated NIC (no `ports`) also needs `CAP_NET_ADMIN` for the TAP device libkrun opens. CI compiles and tests without libkrunfw; `Container::create` then fails with a libkrun error instead of starting a VM.
+
+Verified on this Linux host with `/dev/kvm` (via sudo), libkrunfw 5.6.4, and Alpine minirootfs 3.20.3:
+
+```text
+sudo LD_LIBRARY_PATH=/tmp/krunfw/lib/x86_64-linux-gnu \
+  ./target/debug/examples/krun_boot /tmp/alpine
+```
+
+stdout:
+
+```text
+hello-from-libkrun
+```
+
+The guest command was `/bin/busybox sh -c "echo hello-from-libkrun; sleep 3"`.
+
+### Apple Silicon Mac mini
+
+The same `krun_*` calls run on Hypervisor.framework when this crate is built on macOS arm64. libkrunfw is a separate install. The tap that currently publishes bottles is `libkrun/krun` (the `slp/krun` GitHub repo `slp/homebrew-krun` documents that tap name):
+
+```bash
+brew tap libkrun/krun
+brew install libkrunfw
+# Optional: the C library. This package does not link it; Cargo compiles the libkrun crate.
+brew install libkrun
+
+cargo build --example krun_boot
+codesign --sign - --entitlements entitlements.plist --force \
+  target/debug/examples/krun_boot
+# If you ship the NAPI addon, sign that too:
+# codesign --sign - --entitlements entitlements.plist --force dist/container.darwin-arm64.node
+
+# Node 24 unpacked rootfs, server listening on 3000, published on 8080.
+# network.ports is [{ host: 8080, guest: 3000 }] (see the TypeScript snippet above).
+LD_LIBRARY_PATH="$(brew --prefix libkrunfw)/lib" \
+  ./target/debug/examples/krun_boot /path/to/node-rootfs
+```
+
+`entitlements.plist` is `com.apple.security.hypervisor`. An ad-hoc signature (`--sign -`) is enough for a local binary; a Developer ID signature is required if the binary is quarantined or shipped. Without the entitlement, Hypervisor.framework denies the VM. Keep `memoryMb` at or below 2048 on an 8 GB machine.
 
 ## Development
 
@@ -74,4 +171,4 @@ npm run build:napi
 npm test
 ```
 
-Rust 1.88 or newer is required (`napi` 3.13).
+Rust 1.88 or newer is required (`napi` 3.13, `rust-toolchain.toml`).

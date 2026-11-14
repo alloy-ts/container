@@ -71,6 +71,18 @@ pub struct NetworkConfig {
     pub gateway: Option<IpAddr>,
     /// Optional MAC address (`aa:bb:cc:dd:ee:ff`). Assigned when omitted.
     pub mac: Option<String>,
+    /// Host-to-guest TCP forwards. libkrun serves these with TSI
+    /// (`host` on the Mac or Linux host, `guest` inside the microVM).
+    /// A Node server on port 3000 published as 8080 is `{ host: 8080, guest: 3000 }`.
+    pub ports: Vec<PublishedPort>,
+}
+
+/// One published TCP port. `host` is the port on the machine running this
+/// process; `guest` is the port the process inside the microVM listens on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublishedPort {
+    pub host: u16,
+    pub guest: u16,
 }
 
 impl Default for NetworkConfig {
@@ -81,6 +93,7 @@ impl Default for NetworkConfig {
             guest_ip: None,
             gateway: None,
             mac: None,
+            ports: Vec::new(),
         }
     }
 }
@@ -376,6 +389,16 @@ impl ContainerOptsBuilder {
 
     pub fn network(mut self, network: NetworkConfig) -> Self {
         self.inner.network = network;
+        self
+    }
+
+    /// Publish `guest` as `host` on the machine running the microVM.
+    ///
+    /// On an Apple Silicon Mac this is how a Node server inside the guest is
+    /// reached from the host. libkrun cannot combine these forwards with a
+    /// dedicated TAP device, so setting any port selects TSI networking.
+    pub fn publish(mut self, host: u16, guest: u16) -> Self {
+        self.inner.network.ports.push(PublishedPort { host, guest });
         self
     }
 

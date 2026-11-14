@@ -21,5 +21,5 @@ pub use container::{Container, Process};
 pub use error::{Error, Result};
 pub use types::{
     ContainerOpts, ContainerOptsBuilder, ContainerState, ContainerStats, ContainerStatus, ExecOpts,
-    ExitStatus, LogStream, Mount, NetworkConfig, NetworkMode, RootfsSource, Signal,
+    ExitStatus, LogStream, Mount, NetworkConfig, NetworkMode, PublishedPort, RootfsSource, Signal,
 };

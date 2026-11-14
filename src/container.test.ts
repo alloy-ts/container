@@ -73,7 +73,7 @@ test("Container.create rejects a missing rootfs", async () => {
   ).rejects.toThrow(/rootfs/i);
 });
 
-test("Container.create does not shell out to an external runtime", async () => {
+test("Container.create boots through libkrun instead of an external runtime", async () => {
   const root = mkdtempSync(join(tmpdir(), "cn-js-root-"));
   await expect(
     Container.create({
@@ -83,5 +83,5 @@ test("Container.create does not shell out to an external runtime", async () => {
       args: ["/bin/true"],
       network: { mode: "none" },
     }),
-  ).rejects.toThrow(/kernel/i);
+  ).rejects.toThrow(/libkrun|hypervisor/i);
 });

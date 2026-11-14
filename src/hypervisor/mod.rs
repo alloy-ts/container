@@ -1,13 +1,12 @@
 //! Internal VMM interface.
 //!
-//! Callers never see this module. [`crate::Container`] picks the host backend:
-//! Linux (KVM), macOS (Virtualization.framework, stub), or Windows (WHPX, stub).
+//! Linux and macOS boot through libkrun (KVM or Hypervisor.framework). Windows
+//! stays a stub: libkrun has no Windows port.
 
-mod macos;
 mod windows;
 
-#[cfg(target_os = "linux")]
-pub(crate) mod linux;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod libkrun;
 
 #[cfg(test)]
 pub(crate) mod loopback;
@@ -19,6 +18,7 @@ use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::error::Result;
+use crate::guest::ExitWait;
 use crate::resource::{NetworkPlan, VirtioFsShare};
 
 pub(crate) const GUEST_AGENT_PORT: u32 = 1024;
@@ -29,16 +29,16 @@ pub(crate) trait BytePipe: AsyncRead + AsyncWrite + Send + Unpin {}
 impl<T> BytePipe for T where T: AsyncRead + AsyncWrite + Send + Unpin {}
 
 pub(crate) enum AgentLink {
-    /// Already connected to the guest init (test hypervisor, or a backend
-    /// that completed the handshake itself).
-    #[allow(dead_code)]
+    /// Already connected to the guest init (test hypervisor, or a guest that
+    /// dialed the vsock port libkrun bridges to a unix socket).
     Connected(Box<dyn BytePipe>),
-    /// Host should connect to this vsock address.
-    ///
-    /// Constructed once the Linux virtio-vsock device model lands; the connect
-    /// path in `container::connect_link` already accepts it.
-    #[allow(dead_code)]
-    Vsock { cid: u32, port: u32 },
+    /// libkrunfw booted and libkrun's init started the entrypoint. There is no
+    /// in-guest agent; stdio is the virtio console.
+    Direct {
+        stdout: Option<Box<dyn AsyncRead + Unpin + Send>>,
+        stderr: Option<Box<dyn AsyncRead + Unpin + Send>>,
+        exit: ExitWait,
+    },
 }
 
 pub(crate) struct BootedVm {
@@ -57,6 +57,11 @@ pub(crate) struct VmConfig {
     pub vsock_port: u32,
     pub network: Option<NetworkPlan>,
     pub shares: Vec<VirtioFsShare>,
+    /// `(host_port, guest_port)` TSI forwards. Empty keeps a dedicated TAP on Linux.
+    pub ports: Vec<(u16, u16)>,
+    pub args: Vec<String>,
+    pub env: Vec<(String, String)>,
+    pub workdir: PathBuf,
 }
 
 #[async_trait]
@@ -69,21 +74,13 @@ pub(crate) trait Hypervisor: Send {
 }
 
 pub(crate) fn platform() -> Box<dyn Hypervisor> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
-        Box::new(linux::LinuxHypervisor::new())
+        Box::new(libkrun::LibkrunHypervisor::new())
     }
-    #[cfg(target_os = "macos")]
-    {
-        Box::new(macos::MacosHypervisor::new())
-    }
-    #[cfg(target_os = "windows")]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         Box::new(windows::WindowsHypervisor::new())
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    {
-        Box::new(windows::UnsupportedHypervisor)
     }
 }
 
